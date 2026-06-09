@@ -1,0 +1,13 @@
+{
+  "buildCommand": "expo export -p web",
+  "outputDirectory": "dist",
+  "devCommand": "expo",
+  "cleanUrls": true,
+  "framework": null,
+  "rewrites": [
+    { "source": "/:path*", "destination": "/" }
+  ]
+}git checkout -b dev
+git add vercel.json
+git commit -m "chore: configura deploy web na Vercel"
+git push -u origin dev
