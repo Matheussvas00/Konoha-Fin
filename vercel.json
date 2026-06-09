@@ -10,4 +10,4 @@
 }git checkout -b dev
 git add vercel.json
 git commit -m "chore: configura deploy web na Vercel"
-git push -u origin dev
+git push -u origin dev  
