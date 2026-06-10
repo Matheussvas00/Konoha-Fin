@@ -1,22 +1,31 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
-  ScrollView, StatusBar,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { supabase } from "../../lib/supabase";
 import {
-  validateUsername, getEmailByUsername, looksLikeEmail,
-} from '../../lib/profile';
+  validateUsername,
+  getEmailByUsername,
+  looksLikeEmail,
+} from "../../lib/profile";
+import { colors, radius, spacing, font, alpha } from "../../lib/theme";
 
 // URL de callback após confirmação de e-mail
 const EMAIL_REDIRECT =
-  Platform.OS === 'web'
-    ? 'http://localhost:8081/callback'
-    : 'konohafin://callback';
+  Platform.OS === "web"
+    ? "http://localhost:8081/callback"
+    : "konohafin://callback";
 
-// ── Validações ────────────────────────────────────────────────────────
 function validateEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
@@ -24,25 +33,28 @@ function validateEmail(email: string) {
 export default function LoginScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
 
-  // campos
-  const [name, setName]               = useState('');
-  const [username, setUsername]       = useState('');
-  const [email, setEmail]             = useState('');
-  const [identifier, setIdentifier]   = useState(''); // login: usuário OU e-mail
-  const [password, setPassword]       = useState('');
-  const [confirm, setConfirm]         = useState('');
-  const [showPass, setShowPass]       = useState(false);
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // estado
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   function clearForm() {
-    setName(''); setUsername(''); setEmail(''); setIdentifier('');
-    setPassword(''); setConfirm('');
-    setError(''); setSuccess('');
+    setName("");
+    setUsername("");
+    setEmail("");
+    setIdentifier("");
+    setPassword("");
+    setConfirm("");
+    setError("");
+    setSuccess("");
   }
 
   function toggleMode() {
@@ -50,25 +62,41 @@ export default function LoginScreen() {
     clearForm();
   }
 
-  // ── Submit ────────────────────────────────────────────────────────
   async function handleSubmit() {
-    setError(''); setSuccess('');
+    setError("");
+    setSuccess("");
 
-    // ── Validações ──────────────────────────────────────────────
     if (isSignUp) {
-      if (!name.trim()) { setError('Digite seu nome completo.'); return; }
-      const uErr = validateUsername(username);
-      if (uErr) { setError(uErr); return; }
-      if (!validateEmail(email)) { setError('E-mail inválido.'); return; }
-      if (password.length < 6) {
-        setError('A senha deve ter no mínimo 6 caracteres.'); return;
+      if (!name.trim()) {
+        setError("Digite seu nome completo.");
+        return;
       }
-      if (password !== confirm) { setError('As senhas não conferem.'); return; }
+      const uErr = validateUsername(username);
+      if (uErr) {
+        setError(uErr);
+        return;
+      }
+      if (!validateEmail(email)) {
+        setError("E-mail inválido.");
+        return;
+      }
+      if (password.length < 6) {
+        setError("A senha deve ter no mínimo 6 caracteres.");
+        return;
+      }
+      if (password !== confirm) {
+        setError("As senhas não conferem.");
+        return;
+      }
     } else {
       if (!identifier.trim()) {
-        setError('Digite seu usuário ou e-mail.'); return;
+        setError("Digite seu usuário ou e-mail.");
+        return;
       }
-      if (!password) { setError('Digite sua senha.'); return; }
+      if (!password) {
+        setError("Digite sua senha.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -81,24 +109,28 @@ export default function LoginScreen() {
         });
         if (signUpErr) throw signUpErr;
 
-        // Atualiza nome e username no perfil (criado pelo trigger do Supabase)
         if (data.user) {
           const { error: profErr } = await supabase
-            .from('profiles')
+            .from("profiles")
             .update({ full_name: name.trim(), username: username.trim() })
-            .eq('id', data.user.id);
-          if (profErr && (profErr.code === '23505' || /duplicate|unique/i.test(profErr.message))) {
-            throw new Error('Este nome de usuário já está em uso.');
+            .eq("id", data.user.id);
+          if (
+            profErr &&
+            (profErr.code === "23505" ||
+              /duplicate|unique/i.test(profErr.message))
+          ) {
+            throw new Error("Este nome de usuário já está em uso.");
           }
         }
-        setSuccess('Conta criada! Verifique seu e-mail se a confirmação estiver ativa.');
+        setSuccess(
+          "Conta criada! Verifique seu e-mail se a confirmação estiver ativa.",
+        );
       } else {
-        // Resolve usuário -> e-mail, se necessário
         let loginEmail = identifier.trim();
         if (!looksLikeEmail(loginEmail)) {
           const resolved = await getEmailByUsername(loginEmail);
           if (!resolved) {
-            throw new Error('Usuário não encontrado.');
+            throw new Error("Usuário não encontrado.");
           }
           loginEmail = resolved;
         }
@@ -108,14 +140,12 @@ export default function LoginScreen() {
           password,
         });
         if (signInErr) throw signInErr;
-        // guardião em _layout.tsx redireciona automaticamente
       }
     } catch (e: any) {
-      // Mensagens amigáveis em pt-BR
       const msg: Record<string, string> = {
-        'Invalid login credentials': 'Usuário/e-mail ou senha incorretos.',
-        'Email not confirmed':       'Confirme seu e-mail antes de entrar.',
-        'User already registered':   'Este e-mail já está cadastrado.',
+        "Invalid login credentials": "Usuário/e-mail ou senha incorretos.",
+        "Email not confirmed": "Confirme seu e-mail antes de entrar.",
+        "User already registered": "Este e-mail já está cadastrado.",
       };
       setError(msg[e.message] ?? e.message);
     } finally {
@@ -123,24 +153,21 @@ export default function LoginScreen() {
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+      behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <StatusBar barStyle="light-content" />
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Logo */}
+        showsVerticalScrollIndicator={false}>
+        {/* Logo — lockup monocromático Konoha */}
         <View style={styles.logoWrap}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="wallet" size={38} color="#e63946" />
+          <View style={styles.logoMark}>
+            <Text style={styles.logoMarkTxt}>K</Text>
           </View>
-          <Text style={styles.logoTitle}>Konoha Fin</Text>
+          <Text style={styles.logoTitle}>KONOHA FIN</Text>
           <Text style={styles.logoSub}>Sua carteira pessoal inteligente</Text>
         </View>
 
@@ -148,39 +175,48 @@ export default function LoginScreen() {
         <View style={styles.toggleRow}>
           <TouchableOpacity
             style={[styles.toggleBtn, !isSignUp && styles.toggleActive]}
-            onPress={() => { if (isSignUp) toggleMode(); }}
-          >
-            <Text style={[styles.toggleTxt, !isSignUp && styles.toggleTxtActive]}>
+            onPress={() => {
+              if (isSignUp) toggleMode();
+            }}>
+            <Text
+              style={[styles.toggleTxt, !isSignUp && styles.toggleTxtActive]}>
               Entrar
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleBtn, isSignUp && styles.toggleActive]}
-            onPress={() => { if (!isSignUp) toggleMode(); }}
-          >
-            <Text style={[styles.toggleTxt, isSignUp && styles.toggleTxtActive]}>
+            onPress={() => {
+              if (!isSignUp) toggleMode();
+            }}>
+            <Text
+              style={[styles.toggleTxt, isSignUp && styles.toggleTxtActive]}>
               Criar conta
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Mensagem de erro */}
         {!!error && (
           <View style={styles.msgBox}>
-            <Ionicons name="alert-circle-outline" size={16} color="#fca5a5" />
+            <Ionicons
+              name="alert-circle-outline"
+              size={16}
+              color={colors.dangerText}
+            />
             <Text style={styles.msgTxt}>{error}</Text>
           </View>
         )}
 
-        {/* Mensagem de sucesso */}
         {!!success && (
           <View style={[styles.msgBox, styles.msgSuccess]}>
-            <Ionicons name="checkmark-circle-outline" size={16} color="#86efac" />
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={16}
+              color={colors.successText}
+            />
             <Text style={[styles.msgTxt, styles.msgSuccessTxt]}>{success}</Text>
           </View>
         )}
 
-        {/* Campos */}
         {isSignUp ? (
           <>
             <View style={styles.field}>
@@ -190,7 +226,7 @@ export default function LoginScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Como quer ser chamado?"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 autoCapitalize="words"
                 returnKeyType="next"
               />
@@ -201,9 +237,11 @@ export default function LoginScreen() {
               <TextInput
                 style={styles.input}
                 value={username}
-                onChangeText={(t) => setUsername(t.replace(/\s/g, '').toLowerCase())}
+                onChangeText={(t) =>
+                  setUsername(t.replace(/\s/g, "").toLowerCase())
+                }
                 placeholder="ex: joao.silva"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
@@ -217,7 +255,7 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="seu@email.com"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -233,7 +271,7 @@ export default function LoginScreen() {
               value={identifier}
               onChangeText={setIdentifier}
               placeholder="seu usuário ou seu@email.com"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="next"
@@ -249,14 +287,20 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               placeholder="Mínimo 6 caracteres"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
               secureTextEntry={!showPass}
-              autoComplete={isSignUp ? 'new-password' : 'current-password'}
-              returnKeyType={isSignUp ? 'next' : 'done'}
+              autoComplete={isSignUp ? "new-password" : "current-password"}
+              returnKeyType={isSignUp ? "next" : "done"}
               onSubmitEditing={isSignUp ? undefined : handleSubmit}
             />
-            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPass((v) => !v)}>
-              <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowPass((v) => !v)}>
+              <Ionicons
+                name={showPass ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={colors.textMuted}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -270,157 +314,167 @@ export default function LoginScreen() {
                 value={confirm}
                 onChangeText={setConfirm}
                 placeholder="Repita a senha"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 secureTextEntry={!showConfirm}
                 returnKeyType="done"
                 onSubmitEditing={handleSubmit}
               />
-              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowConfirm((v) => !v)}>
-                <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowConfirm((v) => !v)}>
+                <Ionicons
+                  name={showConfirm ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color={colors.textMuted}
+                />
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Botão principal */}
         <TouchableOpacity
           style={[styles.submitBtn, loading && { opacity: 0.7 }]}
           onPress={handleSubmit}
           disabled={loading}
-          activeOpacity={0.85}
-        >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.submitTxt}>{isSignUp ? 'Criar conta' : 'Entrar'}</Text>
-          }
+          activeOpacity={0.85}>
+          {loading ? (
+            <ActivityIndicator color={colors.brandText} />
+          ) : (
+            <Text style={styles.submitTxt}>
+              {isSignUp ? "Criar conta" : "Entrar"}
+            </Text>
+          )}
         </TouchableOpacity>
 
-        <View style={{ height: 32 }} />
+        <View style={{ height: spacing.xxxl }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// ── Estilos ───────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0f0f1e',
+    backgroundColor: colors.bg,
   },
   scroll: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xxl,
     paddingVertical: 40,
   },
 
   // Logo
   logoWrap: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 36,
   },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: '#1a1a2e',
-    borderWidth: 1,
-    borderColor: '#2a2a4e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
+  logoMark: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.xl,
+    backgroundColor: colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  logoMarkTxt: {
+    color: colors.brandText,
+    fontSize: 40,
+    fontWeight: font.weight.extrabold,
+    letterSpacing: -1,
   },
   logoTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    color: colors.text,
+    fontSize: font.size.xxl,
+    fontWeight: font.weight.extrabold,
+    letterSpacing: 3,
   },
   logoSub: {
-    color: '#555',
-    fontSize: 13,
-    marginTop: 4,
+    color: colors.textFaint,
+    fontSize: font.size.sm,
+    marginTop: spacing.xs,
   },
 
   // Toggle
   toggleRow: {
-    flexDirection: 'row',
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    flexDirection: "row",
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
-    marginBottom: 24,
-    padding: 4,
+    borderColor: colors.border,
+    marginBottom: spacing.xxl,
+    padding: spacing.xs,
   },
   toggleBtn: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 9,
-    alignItems: 'center',
+    borderRadius: radius.sm,
+    alignItems: "center",
   },
   toggleActive: {
-    backgroundColor: '#e63946',
+    backgroundColor: colors.brand,
   },
   toggleTxt: {
-    color: '#666',
-    fontWeight: '600',
-    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: font.weight.semibold,
+    fontSize: font.size.md,
   },
   toggleTxtActive: {
-    color: '#fff',
+    color: colors.brandText,
   },
 
   // Mensagens
   msgBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(239,68,68,0.12)',
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.dangerBg,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.35)',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
+    borderColor: colors.dangerBorder,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
   msgTxt: {
-    color: '#fca5a5',
-    fontSize: 13,
+    color: colors.dangerText,
+    fontSize: font.size.sm,
     flex: 1,
     lineHeight: 18,
   },
   msgSuccess: {
-    backgroundColor: 'rgba(34,197,94,0.12)',
-    borderColor: 'rgba(34,197,94,0.35)',
+    backgroundColor: colors.successBg,
+    borderColor: colors.successBorder,
   },
   msgSuccessTxt: {
-    color: '#86efac',
+    color: colors.successText,
   },
 
   // Campos
   field: {
-    marginBottom: 14,
+    marginBottom: spacing.md,
   },
   fieldLabel: {
-    color: '#888',
-    fontSize: 12,
-    fontWeight: '700',
+    color: colors.textMuted,
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
     letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginBottom: 6,
+    textTransform: "uppercase",
+    marginBottom: spacing.xs,
   },
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   input: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
     paddingVertical: 13,
-    color: '#fff',
-    fontSize: 15,
+    color: colors.text,
+    fontSize: font.size.md,
   },
   inputFlex: {
     flex: 1,
@@ -428,28 +482,28 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
   },
   eyeBtn: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: '#2a2a4e',
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-    paddingHorizontal: 14,
+    borderColor: colors.border,
+    borderTopRightRadius: radius.md,
+    borderBottomRightRadius: radius.md,
+    paddingHorizontal: spacing.md,
     paddingVertical: 13,
   },
 
-  // Botão
+  // Botão primário — branco com texto preto (estilo Konoha Tech)
   submitBtn: {
-    backgroundColor: '#e63946',
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
+    backgroundColor: colors.brand,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.lg,
+    alignItems: "center",
+    marginTop: spacing.sm,
   },
   submitTxt: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: colors.brandText,
+    fontSize: font.size.lg,
+    fontWeight: font.weight.bold,
     letterSpacing: 0.3,
   },
 });
