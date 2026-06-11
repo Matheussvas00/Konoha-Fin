@@ -61,11 +61,16 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* Telas ocultas da tab bar — acessíveis via router.push */}
       <Tabs.Screen
         name="categorias"
-        options={{ href: null }}
+        options={{
+          title: 'Categorias',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={'pricetags-outline' as IconName} size={size} color={color as string} />
+          ),
+        }}
       />
+      {/* Telas ocultas da tab bar — acessíveis via router.push */}
       <Tabs.Screen
         name="perfil"
         options={{ href: null }}
