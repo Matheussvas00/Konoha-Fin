@@ -162,6 +162,23 @@ export default function PerfilScreen() {
               : <Text style={styles.saveTxt}>Salvar alterações</Text>}
           </TouchableOpacity>
 
+          {/* Gerenciar */}
+          <Text style={styles.sectionLabel}>Gerenciar</Text>
+          <TouchableOpacity
+            style={styles.navRow}
+            onPress={() => router.push('/(tabs)/categorias')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.navIcon}>
+              <Ionicons name="pricetags-outline" size={18} color={colors.text} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.navTitle}>Categorias</Text>
+              <Text style={styles.navSub}>Cadastrar, editar e excluir categorias</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+
           {/* Sair */}
           <TouchableOpacity style={styles.signOutBtn} onPress={confirmSignOut} activeOpacity={0.85}>
             <Ionicons name="log-out-outline" size={18} color={colors.expenseText} />
@@ -229,6 +246,24 @@ const styles = StyleSheet.create({
     paddingVertical: 16, alignItems: 'center', marginTop: 8,
   },
   saveTxt: { color: colors.brandText, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+
+  sectionLabel: {
+    color: colors.textMuted, fontSize: 12, fontWeight: '700',
+    letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 24, marginBottom: 10,
+  },
+  navRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.border,
+    borderRadius: 14, padding: 14,
+  },
+  navIcon: {
+    width: 38, height: 38, borderRadius: 10,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  navTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  navSub: { color: colors.textFaint, fontSize: 12, marginTop: 2 },
 
   signOutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
