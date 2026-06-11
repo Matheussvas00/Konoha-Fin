@@ -58,6 +58,16 @@ export const ACCOUNT_TYPES: AccountType[] = [
   'checking', 'savings', 'cash', 'credit_card', 'investment', 'other',
 ];
 
+// ── Helpers ───────────────────────────────────────────────────────────
+
+async function currentUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  const id = data.user?.id;
+  if (!id) throw new Error('Sessão expirada. Entre novamente.');
+  return id;
+}
+
 // ── Consultas ─────────────────────────────────────────────────────────
 
 /** Lista carteiras ativas do usuário com saldo calculado pela view. */
@@ -103,9 +113,11 @@ export type CreateAccountInput = {
 };
 
 export async function createAccount(input: CreateAccountInput): Promise<Account> {
+  const user_id = await currentUserId();
   const { data, error } = await supabase
     .from('accounts')
     .insert({
+      user_id,
       name:            input.name,
       type:            input.type,
       initial_balance: input.initial_balance,

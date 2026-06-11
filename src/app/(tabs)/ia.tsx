@@ -7,6 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 import { getAgentName, DEFAULT_AGENT_NAME } from '../../lib/agent';
+import { supabase } from '../../lib/supabase';
 
 // ── Sugestões rápidas ──────────────────────────────────────────────────
 
@@ -40,22 +41,34 @@ export default function IAScreen() {
   );
 
   async function send(text: string) {
-    if (!text.trim() || loading) return;
+    const q = text.trim();
+    if (!q || loading) return;
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', text: text.trim() }]);
+    const history = messages.slice(-10);
+    setMessages((prev) => [...prev, { role: 'user', text: q }]);
     setLoading(true);
 
-    // TODO: integrar Supabase Edge Function com Gemini
-    // Por enquanto: resposta simulada
-    await new Promise((r) => setTimeout(r, 1200));
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: 'ai',
-        text: '🚧 O assistente IA ainda está em desenvolvimento.\n\nEm breve você poderá fazer perguntas sobre seus gastos, receber análises personalizadas e dicas de economia direto aqui.',
-      },
-    ]);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-assistant', {
+        body: { question: q, history, agentName },
+      });
+      if (error) throw error;
+      const answer = (data?.answer ?? '').trim();
+      setMessages((prev) => [
+        ...prev,
+        { role: 'ai', text: answer || 'Não consegui gerar uma resposta agora.' },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'ai',
+          text: 'Não consegui falar com o assistente agora. Verifique sua conexão e tente novamente em instantes.',
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const isEmpty = messages.length === 0;
@@ -71,7 +84,7 @@ export default function IAScreen() {
         </View>
         <View>
           <Text style={s.headerTitle}>{agentName}</Text>
-          <Text style={s.headerSub}>Seu assistente financeiro · Em breve</Text>
+          <Text style={s.headerSub}>Seu assistente financeiro · Gemini</Text>
         </View>
       </View>
 
