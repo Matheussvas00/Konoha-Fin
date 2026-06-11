@@ -12,6 +12,7 @@ import {
 } from '../../lib/analytics';
 import { CategoryBreakdown, MonthlyEvolution } from '../../components/DashboardCharts';
 import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_COLORS } from '../../lib/accounts';
+import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ export default function InicioScreen() {
     return (
       <View style={s.loadingRoot}>
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#e63946" />
+        <ActivityIndicator size="large" color={colors.text} />
       </View>
     );
   }
@@ -118,7 +119,7 @@ export default function InicioScreen() {
           <Text style={s.name}>{firstName(d.fullName)} 👋</Text>
         </View>
         <TouchableOpacity onPress={() => router.push('/(tabs)/perfil')} style={s.signOutBtn}>
-          <Ionicons name="person-circle-outline" size={26} color="#e63946" />
+          <Ionicons name="person-circle-outline" size={26} color={colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -130,8 +131,8 @@ export default function InicioScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#e63946"
-            colors={['#e63946']}
+            tintColor={colors.text}
+            colors={[colors.text]}
           />
         }
       >
@@ -143,7 +144,7 @@ export default function InicioScreen() {
               <Ionicons
                 name={hideBalance ? 'eye-off-outline' : 'eye-outline'}
                 size={18}
-                color="#aaa"
+                color={colors.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -155,21 +156,21 @@ export default function InicioScreen() {
               style={[s.qaBtn, s.qaBtnIncome]}
               onPress={() => router.push('/(tabs)/lancamentos')}
             >
-              <Ionicons name="add-circle-outline" size={16} color="#fff" />
+              <Ionicons name="add-circle-outline" size={16} color={colors.text} />
               <Text style={s.qaBtnTxt}>Receita</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.qaBtn, s.qaBtnExpense]}
               onPress={() => router.push('/(tabs)/lancamentos')}
             >
-              <Ionicons name="remove-circle-outline" size={16} color="#fff" />
+              <Ionicons name="remove-circle-outline" size={16} color={colors.text} />
               <Text style={s.qaBtnTxt}>Despesa</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.qaBtn, s.qaBtnTransfer]}
               onPress={() => router.push('/(tabs)/lancamentos')}
             >
-              <Ionicons name="swap-horizontal-outline" size={16} color="#fff" />
+              <Ionicons name="swap-horizontal-outline" size={16} color={colors.text} />
               <Text style={s.qaBtnTxt}>Transferência</Text>
             </TouchableOpacity>
           </View>
@@ -179,20 +180,20 @@ export default function InicioScreen() {
         <View style={s.monthRow}>
           <View style={[s.monthCard, s.monthCardIncome]}>
             <View style={s.monthIcon}>
-              <Ionicons name="arrow-down-circle-outline" size={20} color="#22c55e" />
+              <Ionicons name="arrow-down-circle-outline" size={20} color={colors.income} />
             </View>
             <Text style={s.monthCardLabel}>Entradas</Text>
-            <Text style={[s.monthCardValue, { color: '#22c55e' }]}>
+            <Text style={[s.monthCardValue, { color: colors.income }]}>
               {hideBalance ? '••••' : formatBRL(d.monthly.income)}
             </Text>
           </View>
 
           <View style={[s.monthCard, s.monthCardExpense]}>
             <View style={s.monthIcon}>
-              <Ionicons name="arrow-up-circle-outline" size={20} color="#f87171" />
+              <Ionicons name="arrow-up-circle-outline" size={20} color={colors.expense} />
             </View>
             <Text style={s.monthCardLabel}>Saídas</Text>
-            <Text style={[s.monthCardValue, { color: '#f87171' }]}>
+            <Text style={[s.monthCardValue, { color: colors.expense }]}>
               {hideBalance ? '••••' : formatBRL(d.monthly.expense)}
             </Text>
           </View>
@@ -213,13 +214,13 @@ export default function InicioScreen() {
           activeOpacity={0.85}
         >
           <View style={s.planIcon}>
-            <Ionicons name="flag" size={20} color="#e63946" />
+            <Ionicons name="flag" size={20} color={colors.text} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.planTitle}>Metas e Orçamento</Text>
             <Text style={s.planSub}>Defina limites e objetivos de economia</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#555" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
         </TouchableOpacity>
 
         {/* ── Carteiras ── */}
@@ -234,14 +235,14 @@ export default function InicioScreen() {
             style={s.emptyCard}
             onPress={() => router.push('/(tabs)/carteiras')}
           >
-            <Ionicons name="wallet-outline" size={28} color="#555" />
+            <Ionicons name="wallet-outline" size={28} color={colors.textFaint} />
             <Text style={s.emptyTxt}>Nenhuma carteira ainda</Text>
             <Text style={s.emptyLink}>Criar minha primeira →</Text>
           </TouchableOpacity>
         ) : (
           d.topAccounts.map((acc) => {
-            const icon  = ACCOUNT_TYPE_ICONS[acc.type as any] ?? 'wallet-outline';
-            const color = acc.color ?? ACCOUNT_TYPE_COLORS[acc.type as any] ?? '#555';
+            const icon  = (ACCOUNT_TYPE_ICONS as Record<string, string>)[acc.type] ?? 'wallet-outline';
+            const color = acc.color ?? (ACCOUNT_TYPE_COLORS as Record<string, string>)[acc.type] ?? colors.textFaint;
             return (
               <TouchableOpacity
                 key={acc.id}
@@ -255,7 +256,7 @@ export default function InicioScreen() {
                 <Text style={s.accountName} numberOfLines={1}>{acc.name}</Text>
                 <Text style={[
                   s.accountBalance,
-                  acc.balance < 0 && { color: '#f87171' },
+                  acc.balance < 0 && { color: colors.expense },
                 ]}>
                   {hideBalance ? '••••' : formatBRL(acc.balance)}
                 </Text>
@@ -276,7 +277,7 @@ export default function InicioScreen() {
             style={s.emptyCard}
             onPress={() => router.push('/(tabs)/lancamentos')}
           >
-            <Ionicons name="receipt-outline" size={28} color="#555" />
+            <Ionicons name="receipt-outline" size={28} color={colors.textFaint} />
             <Text style={s.emptyTxt}>Nenhum lançamento este mês</Text>
             <Text style={s.emptyLink}>Adicionar primeiro →</Text>
           </TouchableOpacity>
@@ -285,13 +286,13 @@ export default function InicioScreen() {
             const isIncome   = tx.type === 'income';
             const isTransfer = tx.type === 'transfer';
             const sign       = isIncome ? '+' : isTransfer ? '' : '-';
-            const valueColor = isIncome ? '#22c55e' : isTransfer ? '#60a5fa' : '#f87171';
+            const valueColor = isIncome ? colors.income : isTransfer ? colors.transfer : colors.expense;
             const txIcon     = isIncome
               ? 'arrow-down-circle-outline'
               : isTransfer
               ? 'swap-horizontal-outline'
               : 'arrow-up-circle-outline';
-            const iconColor  = isIncome ? '#22c55e' : isTransfer ? '#60a5fa' : '#f87171';
+            const iconColor  = isIncome ? colors.income : isTransfer ? colors.transfer : colors.expense;
 
             return (
               <View key={tx.id} style={s.txRow}>
@@ -325,16 +326,16 @@ export default function InicioScreen() {
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0f0f1e',
+    backgroundColor: colors.bg,
   },
   planCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     padding: 16,
     marginTop: 16,
   },
@@ -342,22 +343,22 @@ const s = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(230,57,70,0.15)',
+    backgroundColor: alpha(colors.text, 0.15),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  planTitle: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  planSub: { color: '#666', fontSize: 12, marginTop: 2 },
+  planTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  planSub: { color: colors.textFaint, fontSize: 12, marginTop: 2 },
   loadingRoot: {
     flex: 1,
-    backgroundColor: '#0f0f1e',
+    backgroundColor: colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   // Header
   header: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     paddingTop: 56,
     paddingBottom: 18,
     paddingHorizontal: 20,
@@ -365,15 +366,15 @@ const s = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a4e',
+    borderBottomColor: colors.border,
   },
   greet: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '500',
   },
   name: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 22,
     fontWeight: '800',
     marginTop: 2,
@@ -381,7 +382,7 @@ const s = StyleSheet.create({
   signOutBtn: {
     padding: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(230,57,70,0.1)',
+    backgroundColor: alpha(colors.text, 0.1),
   },
 
   // Scroll
@@ -390,10 +391,10 @@ const s = StyleSheet.create({
 
   // Saldo
   balanceCard: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     padding: 22,
     marginBottom: 16,
   },
@@ -404,14 +405,14 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   balanceLabel: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   balanceValue: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 34,
     fontWeight: '800',
     letterSpacing: -0.5,
@@ -432,11 +433,11 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
   },
-  qaBtnIncome:   { backgroundColor: '#16a34a' },
-  qaBtnExpense:  { backgroundColor: '#dc2626' },
-  qaBtnTransfer: { backgroundColor: '#2563eb' },
+  qaBtnIncome:   { backgroundColor: colors.incomeStrong },
+  qaBtnExpense:  { backgroundColor: colors.expenseStrong },
+  qaBtnTransfer: { backgroundColor: colors.borderStrong },
   qaBtnTxt: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -454,18 +455,18 @@ const s = StyleSheet.create({
     padding: 16,
   },
   monthCardIncome: {
-    backgroundColor: 'rgba(34,197,94,0.07)',
-    borderColor: 'rgba(34,197,94,0.2)',
+    backgroundColor: alpha(colors.income, 0.07),
+    borderColor: alpha(colors.income, 0.2),
   },
   monthCardExpense: {
-    backgroundColor: 'rgba(248,113,113,0.07)',
-    borderColor: 'rgba(248,113,113,0.2)',
+    backgroundColor: alpha(colors.expense, 0.07),
+    borderColor: alpha(colors.expense, 0.2),
   },
   monthIcon: {
     marginBottom: 8,
   },
   monthCardLabel: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -486,12 +487,12 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   sectionTitle: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '700',
   },
   sectionLink: {
-    color: '#e63946',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -499,21 +500,21 @@ const s = StyleSheet.create({
   // Empty state
   emptyCard: {
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     paddingVertical: 28,
     marginBottom: 24,
     gap: 6,
   },
   emptyTxt: {
-    color: '#555',
+    color: colors.textFaint,
     fontSize: 14,
   },
   emptyLink: {
-    color: '#e63946',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '600',
     marginTop: 2,
@@ -523,10 +524,10 @@ const s = StyleSheet.create({
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     padding: 14,
     marginBottom: 8,
     gap: 12,
@@ -540,12 +541,12 @@ const s = StyleSheet.create({
   },
   accountName: {
     flex: 1,
-    color: '#fff',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
   accountBalance: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -554,10 +555,10 @@ const s = StyleSheet.create({
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     padding: 14,
     marginBottom: 8,
     gap: 12,
@@ -574,12 +575,12 @@ const s = StyleSheet.create({
     gap: 2,
   },
   txDesc: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
   txMeta: {
-    color: '#666',
+    color: colors.textFaint,
     fontSize: 12,
   },
   txAmount: {

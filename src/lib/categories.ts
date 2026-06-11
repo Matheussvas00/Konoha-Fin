@@ -47,6 +47,16 @@ export const INCOME_ICONS: Array<{ icon: string; label: string }> = [
   { icon: 'ellipsis-horizontal-outline', label: 'Outro'   },
 ];
 
+// ── Helpers ────────────────────────────────────────────────────────────
+
+async function currentUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  const id = data.user?.id;
+  if (!id) throw new Error('Sessão expirada. Entre novamente.');
+  return id;
+}
+
 // ── Consultas ──────────────────────────────────────────────────────────
 
 export async function listCategories(): Promise<Category[]> {
@@ -84,9 +94,11 @@ export type CreateCategoryInput = {
 };
 
 export async function createCategory(input: CreateCategoryInput): Promise<Category> {
+  const user_id = await currentUserId();
   const { data, error } = await supabase
     .from('categories')
     .insert({
+      user_id,
       name:      input.name,
       type:      input.type,
       color:     input.color  ?? CATEGORY_COLORS[0],
@@ -98,6 +110,20 @@ export async function createCategory(input: CreateCategoryInput): Promise<Catego
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Conta quantos registros dependem de uma categoria (lançamentos + orçamentos).
+ * Usado para impedir a exclusão de categorias em uso.
+ */
+export async function getCategoryUsage(id: string): Promise<{ transactions: number; budgets: number }> {
+  const [tx, bud] = await Promise.all([
+    supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('category_id', id),
+    supabase.from('budgets').select('category_id', { count: 'exact', head: true }).eq('category_id', id),
+  ]);
+  if (tx.error)  throw tx.error;
+  if (bud.error) throw bud.error;
+  return { transactions: tx.count ?? 0, budgets: bud.count ?? 0 };
 }
 
 export type UpdateCategoryInput = {
@@ -119,6 +145,23 @@ export async function updateCategory(id: string, input: UpdateCategoryInput): Pr
 }
 
 export async function deleteCategory(id: string): Promise<void> {
+  // Regra de negócio: só é possível excluir uma categoria que não possua
+  // nenhum registro vinculado (lançamentos ou orçamentos).
+  const usage = await getCategoryUsage(id);
+  if (usage.transactions > 0 || usage.budgets > 0) {
+    const partes: string[] = [];
+    if (usage.transactions > 0) {
+      partes.push(`${usage.transactions} lançamento${usage.transactions > 1 ? 's' : ''}`);
+    }
+    if (usage.budgets > 0) {
+      partes.push(`${usage.budgets} orçamento${usage.budgets > 1 ? 's' : ''}`);
+    }
+    throw new Error(
+      `Não é possível excluir: esta categoria tem ${partes.join(' e ')} vinculado(s). ` +
+      'Remova ou altere esses registros antes de excluí-la.'
+    );
+  }
+
   const { error } = await supabase
     .from('categories')
     .delete()

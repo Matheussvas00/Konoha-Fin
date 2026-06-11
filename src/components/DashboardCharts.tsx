@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { CategorySlice, MonthBar } from '../lib/analytics';
+import { colors, spacing, radius, font, alpha } from '../lib/theme';
 
 function formatBRL(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -87,11 +88,11 @@ export function MonthlyEvolution({ data }: { data: MonthBar[] }) {
 
           <View style={s.legend}>
             <View style={s.legendItem}>
-              <View style={[s.legendDot, { backgroundColor: '#22c55e' }]} />
+              <View style={[s.legendDot, { backgroundColor: colors.income }]} />
               <Text style={s.legendTxt}>Entradas</Text>
             </View>
             <View style={s.legendItem}>
-              <View style={[s.legendDot, { backgroundColor: '#e63946' }]} />
+              <View style={[s.legendDot, { backgroundColor: colors.expense }]} />
               <Text style={s.legendTxt}>Saídas</Text>
             </View>
           </View>
@@ -103,10 +104,10 @@ export function MonthlyEvolution({ data }: { data: MonthBar[] }) {
 
 const s = StyleSheet.create({
   card: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     padding: 16,
     marginTop: 16,
   },
@@ -117,17 +118,17 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
   },
   totalTxt: {
-    color: '#e63946',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
   empty: {
-    color: '#666',
+    color: colors.textFaint,
     fontSize: 13,
     marginTop: 10,
   },
@@ -147,16 +148,16 @@ const s = StyleSheet.create({
     paddingRight: 8,
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  catName: { color: '#ccc', fontSize: 13, fontWeight: '600', flexShrink: 1 },
-  catValue: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  catName: { color: colors.textMuted, fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  catValue: { color: colors.text, fontSize: 13, fontWeight: '700' },
   track: {
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#12122a',
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   fill: { height: '100%', borderRadius: 4 },
-  catPct: { color: '#555', fontSize: 11, fontWeight: '600', alignSelf: 'flex-end' },
+  catPct: { color: colors.textFaint, fontSize: 11, fontWeight: '600', alignSelf: 'flex-end' },
 
   // Evolução
   chart: {
@@ -184,9 +185,9 @@ const s = StyleSheet.create({
     borderTopLeftRadius: 3,
     borderTopRightRadius: 3,
   },
-  barIncome:  { backgroundColor: '#22c55e' },
-  barExpense: { backgroundColor: '#e63946' },
-  colLabel: { color: '#666', fontSize: 11, fontWeight: '600' },
+  barIncome:  { backgroundColor: colors.income },
+  barExpense: { backgroundColor: colors.expense },
+  colLabel: { color: colors.textFaint, fontSize: 11, fontWeight: '600' },
 
   legend: {
     flexDirection: 'row',
@@ -196,5 +197,5 @@ const s = StyleSheet.create({
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 9, height: 9, borderRadius: 3 },
-  legendTxt: { color: '#888', fontSize: 12, fontWeight: '600' },
+  legendTxt: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
 });

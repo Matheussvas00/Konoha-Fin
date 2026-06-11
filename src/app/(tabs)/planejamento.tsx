@@ -16,6 +16,7 @@ import {
   goalProgress, GOAL_COLORS, GOAL_ICONS,
 } from '../../lib/goals';
 import { Category, listCategoriesByType } from '../../lib/categories';
+import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────
 function formatBRL(v: number) {
@@ -32,13 +33,14 @@ export default function PlanejamentoScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('budgets');
+  const [search, setSearch] = useState('');
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Planejamento</Text>
         <View style={s.iconBtn} />
@@ -51,7 +53,7 @@ export default function PlanejamentoScreen() {
           onPress={() => setTab('budgets')}
         >
           <Ionicons name="pie-chart-outline" size={16}
-            color={tab === 'budgets' ? '#fff' : '#888'} />
+            color={tab === 'budgets' ? colors.brandText : colors.textMuted} />
           <Text style={[s.tabTxt, tab === 'budgets' && s.tabTxtActive]}>Orçamentos</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -59,12 +61,26 @@ export default function PlanejamentoScreen() {
           onPress={() => setTab('goals')}
         >
           <Ionicons name="flag-outline" size={16}
-            color={tab === 'goals' ? '#fff' : '#888'} />
+            color={tab === 'goals' ? colors.brandText : colors.textMuted} />
           <Text style={[s.tabTxt, tab === 'goals' && s.tabTxtActive]}>Metas</Text>
         </TouchableOpacity>
       </View>
 
-      {tab === 'budgets' ? <BudgetsTab /> : <GoalsTab />}
+      {/* Busca */}
+      <View style={s.searchBox}>
+        <Ionicons name="search" size={18} color={colors.textFaint} />
+        <TextInput
+          style={s.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar..."
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
+      {tab === 'budgets' ? <BudgetsTab search={search} /> : <GoalsTab search={search} />}
     </View>
   );
 }
@@ -72,7 +88,7 @@ export default function PlanejamentoScreen() {
 // ════════════════════════════════════════════════════════════════════
 // ABA ORÇAMENTOS
 // ════════════════════════════════════════════════════════════════════
-function BudgetsTab() {
+function BudgetsTab({ search }: { search: string }) {
   const [items, setItems]     = useState<BudgetProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -145,18 +161,23 @@ function BudgetsTab() {
   const totalLimit = items.reduce((s, b) => s + b.amount, 0);
   const totalSpent = items.reduce((s, b) => s + b.spent, 0);
 
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? items.filter((b) => b.categoryName.toLowerCase().includes(q))
+    : items;
+
   if (loading) {
-    return <View style={s.center}><ActivityIndicator size="large" color="#e63946" /></View>;
+    return <View style={s.center}><ActivityIndicator size="large" color={colors.text} /></View>;
   }
 
   return (
     <>
       <FlatList
-        data={items}
+        data={filtered}
         keyExtractor={(i) => i.id}
         onRefresh={() => { setRefreshing(true); load(true); }}
         refreshing={refreshing}
-        contentContainerStyle={items.length === 0 ? s.listEmpty : s.listContent}
+        contentContainerStyle={filtered.length === 0 ? s.listEmpty : s.listContent}
         ListHeaderComponent={
           items.length > 0 ? (
             <View style={s.summaryCard}>
@@ -188,7 +209,7 @@ function BudgetsTab() {
                 <Text style={s.cardName} numberOfLines={1}>{item.categoryName}</Text>
               </View>
               <TouchableOpacity onPress={() => confirmDelete(item)} hitSlop={10}>
-                <Ionicons name="trash-outline" size={18} color="#555" />
+                <Ionicons name="trash-outline" size={18} color={colors.expense} />
               </TouchableOpacity>
             </View>
 
@@ -197,16 +218,16 @@ function BudgetsTab() {
                 s.fill,
                 {
                   width: `${Math.min(item.pct, 100)}%`,
-                  backgroundColor: item.over ? '#e63946' : item.categoryColor,
+                  backgroundColor: item.over ? colors.expense : item.categoryColor,
                 },
               ]} />
             </View>
 
             <View style={s.cardBottom}>
-              <Text style={[s.spentTxt, item.over && { color: '#e63946' }]}>
+              <Text style={[s.spentTxt, item.over && { color: colors.expense }]}>
                 {formatBRL(item.spent)} de {formatBRL(item.amount)}
               </Text>
-              <Text style={[s.remainTxt, item.over && { color: '#e63946' }]}>
+              <Text style={[s.remainTxt, item.over && { color: colors.expense }]}>
                 {item.over
                   ? `Excedeu ${formatBRL(Math.abs(item.remaining))}`
                   : `Resta ${formatBRL(item.remaining)}`}
@@ -217,7 +238,7 @@ function BudgetsTab() {
       />
 
       <TouchableOpacity style={s.fab} onPress={openModal} activeOpacity={0.85}>
-        <Ionicons name="add" size={26} color="#fff" />
+        <Ionicons name="add" size={26} color={colors.brandText} />
       </TouchableOpacity>
 
       {/* Modal novo orçamento */}
@@ -248,8 +269,8 @@ function BudgetsTab() {
                       onPress={() => setPickedCat(c.id)}
                     >
                       <Ionicons name={(c.icon ?? 'pricetag-outline') as any}
-                        size={14} color={active ? '#fff' : col} />
-                      <Text style={[s.catChipTxt, active && { color: '#fff' }]}>{c.name}</Text>
+                        size={14} color={active ? colors.text : col} />
+                      <Text style={[s.catChipTxt, active && { color: colors.text }]}>{c.name}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -263,7 +284,7 @@ function BudgetsTab() {
               onChangeText={setAmount}
               keyboardType="decimal-pad"
               placeholder="0,00"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
             />
 
             <View style={s.btnRow}>
@@ -275,7 +296,7 @@ function BudgetsTab() {
                 onPress={handleSave}
                 disabled={saving}
               >
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.btnSaveTxt}>Salvar</Text>}
+                {saving ? <ActivityIndicator color={colors.brandText} /> : <Text style={s.btnSaveTxt}>Salvar</Text>}
               </TouchableOpacity>
             </View>
             <View style={{ height: 40 }} />
@@ -289,7 +310,7 @@ function BudgetsTab() {
 // ════════════════════════════════════════════════════════════════════
 // ABA METAS
 // ════════════════════════════════════════════════════════════════════
-function GoalsTab() {
+function GoalsTab({ search }: { search: string }) {
   const [goals, setGoals]     = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -389,18 +410,23 @@ function GoalsTab() {
     ]);
   }
 
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? goals.filter((g) => g.name.toLowerCase().includes(q))
+    : goals;
+
   if (loading) {
-    return <View style={s.center}><ActivityIndicator size="large" color="#e63946" /></View>;
+    return <View style={s.center}><ActivityIndicator size="large" color={colors.text} /></View>;
   }
 
   return (
     <>
       <FlatList
-        data={goals}
+        data={filtered}
         keyExtractor={(i) => i.id}
         onRefresh={() => { setRefreshing(true); load(true); }}
         refreshing={refreshing}
-        contentContainerStyle={goals.length === 0 ? s.listEmpty : s.listContent}
+        contentContainerStyle={filtered.length === 0 ? s.listEmpty : s.listContent}
         ListEmptyComponent={
           <View style={s.emptyWrap}>
             <Text style={s.emptyEmoji}>🏆</Text>
@@ -412,7 +438,7 @@ function GoalsTab() {
         }
         renderItem={({ item }) => {
           const pct = goalProgress(item);
-          const col = item.color ?? '#e63946';
+          const col = item.color ?? colors.brand;
           return (
             <View style={[s.card, item.is_completed && { borderColor: col }]}>
               <View style={s.cardTop}>
@@ -426,7 +452,7 @@ function GoalsTab() {
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => confirmDelete(item)} hitSlop={10}>
-                  <Ionicons name="trash-outline" size={18} color="#555" />
+                  <Ionicons name="trash-outline" size={18} color={colors.expense} />
                 </TouchableOpacity>
               </View>
 
@@ -444,12 +470,12 @@ function GoalsTab() {
               {!item.is_completed && (
                 <View style={s.goalActions}>
                   <TouchableOpacity style={s.goalBtn} onPress={() => promptContribute(item, 1)}>
-                    <Ionicons name="add" size={16} color="#22c55e" />
-                    <Text style={[s.goalBtnTxt, { color: '#22c55e' }]}>Aportar</Text>
+                    <Ionicons name="add" size={16} color={colors.income} />
+                    <Text style={[s.goalBtnTxt, { color: colors.income }]}>Aportar</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={s.goalBtn} onPress={() => promptContribute(item, -1)}>
-                    <Ionicons name="remove" size={16} color="#f87171" />
-                    <Text style={[s.goalBtnTxt, { color: '#f87171' }]}>Retirar</Text>
+                    <Ionicons name="remove" size={16} color={colors.expense} />
+                    <Text style={[s.goalBtnTxt, { color: colors.expense }]}>Retirar</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -459,7 +485,7 @@ function GoalsTab() {
       />
 
       <TouchableOpacity style={s.fab} onPress={openModal} activeOpacity={0.85}>
-        <Ionicons name="add" size={26} color="#fff" />
+        <Ionicons name="add" size={26} color={colors.brandText} />
       </TouchableOpacity>
 
       {/* Modal nova meta */}
@@ -479,7 +505,7 @@ function GoalsTab() {
               value={name}
               onChangeText={setName}
               placeholder="Ex.: Viagem, Reserva de emergência…"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
             />
 
             <Text style={s.fieldLabel}>Valor alvo (R$)</Text>
@@ -489,7 +515,7 @@ function GoalsTab() {
               onChangeText={setTarget}
               keyboardType="decimal-pad"
               placeholder="0,00"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
             />
 
             <Text style={s.fieldLabel}>Já guardado (opcional)</Text>
@@ -499,7 +525,7 @@ function GoalsTab() {
               onChangeText={setInitial}
               keyboardType="decimal-pad"
               placeholder="0,00"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
             />
 
             <Text style={s.fieldLabel}>Ícone</Text>
@@ -510,7 +536,7 @@ function GoalsTab() {
                   style={[s.iconPick, icon === ic && { borderColor: color, backgroundColor: color + '22' }]}
                   onPress={() => setIcon(ic)}
                 >
-                  <Ionicons name={ic as any} size={20} color={icon === ic ? color : '#888'} />
+                  <Ionicons name={ic as any} size={20} color={icon === ic ? color : colors.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -535,7 +561,7 @@ function GoalsTab() {
                 onPress={handleSave}
                 disabled={saving}
               >
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.btnSaveTxt}>Criar meta</Text>}
+                {saving ? <ActivityIndicator color={colors.brandText} /> : <Text style={s.btnSaveTxt}>Criar meta</Text>}
               </TouchableOpacity>
             </View>
             <View style={{ height: 40 }} />
@@ -548,7 +574,7 @@ function GoalsTab() {
 
 // ── Estilos ───────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f0f1e' },
+  root: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   header: {
@@ -556,119 +582,129 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 12,
   },
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  headerTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
 
   tabs: {
     flexDirection: 'row', gap: 8,
     marginHorizontal: 16, marginBottom: 8,
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 4,
-    borderWidth: 1, borderColor: '#2a2a4e',
+    backgroundColor: colors.surface, borderRadius: 12, padding: 4,
+    borderWidth: 1, borderColor: colors.border,
   },
   tab: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 10, borderRadius: 9,
   },
-  tabActive: { backgroundColor: '#e63946' },
-  tabTxt: { color: '#888', fontWeight: '600', fontSize: 14 },
-  tabTxtActive: { color: '#fff' },
+  tabActive: { backgroundColor: colors.brand },
+  tabTxt: { color: colors.textMuted, fontWeight: '600', fontSize: 14 },
+  tabTxtActive: { color: colors.brandText },
+
+  // Busca
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 16, marginBottom: 8,
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 10,
+  },
+  searchInput: { flex: 1, color: colors.text, fontSize: 15, padding: 0 },
 
   listContent: { padding: 16, paddingTop: 8, gap: 12, paddingBottom: 100 },
   listEmpty: { flex: 1, padding: 16 },
 
   summaryCard: {
-    backgroundColor: '#1a1a2e', borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: '#2a2a4e', marginBottom: 4,
+    backgroundColor: colors.surface, borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: colors.border, marginBottom: 4,
   },
   summaryCol: { gap: 4 },
   summaryLabel: {
-    color: '#888', fontSize: 12, fontWeight: '700',
+    color: colors.textMuted, fontSize: 12, fontWeight: '700',
     letterSpacing: 0.5, textTransform: 'uppercase',
   },
-  summaryValue: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  summaryOf: { color: '#666', fontSize: 14, fontWeight: '600' },
+  summaryValue: { color: colors.text, fontSize: 20, fontWeight: '700' },
+  summaryOf: { color: colors.textFaint, fontSize: 14, fontWeight: '600' },
 
   card: {
-    backgroundColor: '#1a1a2e', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: '#2a2a4e', gap: 10,
+    backgroundColor: colors.surface, borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: colors.border, gap: 10,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   catLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, paddingRight: 8 },
   iconWrap: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  cardName: { color: '#fff', fontSize: 15, fontWeight: '600', flexShrink: 1 },
-  doneTxt: { color: '#22c55e', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  cardName: { color: colors.text, fontSize: 15, fontWeight: '600', flexShrink: 1 },
+  doneTxt: { color: colors.income, fontSize: 12, fontWeight: '600', marginTop: 2 },
 
-  track: { height: 9, borderRadius: 5, backgroundColor: '#12122a', overflow: 'hidden' },
+  track: { height: 9, borderRadius: 5, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 5 },
 
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  spentTxt: { color: '#ccc', fontSize: 13, fontWeight: '600' },
-  remainTxt: { color: '#888', fontSize: 13, fontWeight: '700' },
+  spentTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  remainTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
 
   goalActions: { flexDirection: 'row', gap: 10, marginTop: 2 },
   goalBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: '#2a2a4e',
+    paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
   },
   goalBtnTxt: { fontSize: 13, fontWeight: '700' },
 
   // Empty
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyEmoji: { fontSize: 52, marginBottom: 14 },
-  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  emptySub: { color: '#666', fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  emptySub: { color: colors.textFaint, fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
   // FAB
   fab: {
     position: 'absolute', right: 20, bottom: 24,
-    width: 56, height: 56, borderRadius: 28, backgroundColor: '#e63946',
+    width: 56, height: 56, borderRadius: 28, backgroundColor: colors.brand,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#e63946', shadowOpacity: 0.4, shadowRadius: 10,
+    shadowColor: colors.brand, shadowOpacity: 0.4, shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 }, elevation: 6,
   },
 
   // Modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' },
   sheet: {
-    backgroundColor: '#12122a', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    backgroundColor: colors.surfaceAlt, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingTop: 12, maxHeight: '88%',
-    borderTopWidth: 1, borderColor: '#2a2a4e',
+    borderTopWidth: 1, borderColor: colors.border,
   },
-  sheetHandle: { width: 40, height: 4, backgroundColor: '#333', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  sheetTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 20 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  sheetTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 20 },
   fieldLabel: {
-    color: '#888', fontSize: 12, fontWeight: '700',
+    color: colors.textMuted, fontSize: 12, fontWeight: '700',
     letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8, marginTop: 4,
   },
-  hint: { color: '#666', fontSize: 13, marginBottom: 16, lineHeight: 18 },
+  hint: { color: colors.textFaint, fontSize: 13, marginBottom: 16, lineHeight: 18 },
   input: {
-    backgroundColor: '#1e1e3a', borderWidth: 1, borderColor: '#2a2a4e', borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 13, color: '#fff', fontSize: 15, marginBottom: 16,
+    backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 13, color: colors.text, fontSize: 15, marginBottom: 16,
   },
 
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   catChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1, borderColor: '#2a2a4e', backgroundColor: '#1e1e3a',
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt,
   },
-  catChipTxt: { color: '#ccc', fontSize: 13, fontWeight: '600' },
+  catChipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
 
   iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
   iconPick: {
     width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#2a2a4e', backgroundColor: '#1e1e3a',
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt,
   },
 
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
   colorDot: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
-  colorDotActive: { borderColor: '#fff', transform: [{ scale: 1.15 }] },
+  colorDotActive: { borderColor: colors.text, transform: [{ scale: 1.15 }] },
 
   btnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
   btnCancel: {
     flex: 1, paddingVertical: 14, borderRadius: 12,
-    borderWidth: 1, borderColor: '#2a2a4e', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, alignItems: 'center',
   },
-  btnCancelTxt: { color: '#888', fontWeight: '600', fontSize: 15 },
-  btnSave: { flex: 2, paddingVertical: 14, borderRadius: 12, backgroundColor: '#e63946', alignItems: 'center' },
-  btnSaveTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  btnCancelTxt: { color: colors.textMuted, fontWeight: '600', fontSize: 15 },
+  btnSave: { flex: 2, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.brand, alignItems: 'center' },
+  btnSaveTxt: { color: colors.brandText, fontWeight: '700', fontSize: 15 },
 });

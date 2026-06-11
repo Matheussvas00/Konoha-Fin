@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth';
 import {
   Profile, getMyProfile, updateMyProfile, validateUsername,
 } from '../../lib/profile';
+import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 export default function PerfilScreen() {
   const router = useRouter();
@@ -84,7 +85,7 @@ export default function PerfilScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Meu perfil</Text>
         <View style={styles.iconBtn} />
@@ -92,7 +93,7 @@ export default function PerfilScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#e63946" />
+          <ActivityIndicator size="large" color={colors.text} />
         </View>
       ) : (
         <ScrollView
@@ -111,13 +112,13 @@ export default function PerfilScreen() {
           {/* Mensagens */}
           {!!error && (
             <View style={styles.msgBox}>
-              <Ionicons name="alert-circle-outline" size={16} color="#fca5a5" />
+              <Ionicons name="alert-circle-outline" size={16} color={colors.expenseText} />
               <Text style={styles.msgTxt}>{error}</Text>
             </View>
           )}
           {!!success && (
             <View style={[styles.msgBox, styles.msgSuccess]}>
-              <Ionicons name="checkmark-circle-outline" size={16} color="#86efac" />
+              <Ionicons name="checkmark-circle-outline" size={16} color={colors.successText} />
               <Text style={[styles.msgTxt, styles.msgSuccessTxt]}>{success}</Text>
             </View>
           )}
@@ -130,7 +131,7 @@ export default function PerfilScreen() {
               value={fullName}
               onChangeText={(t) => { setFullName(t); setSuccess(''); }}
               placeholder="Seu nome"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="words"
             />
           </View>
@@ -142,7 +143,7 @@ export default function PerfilScreen() {
               value={username}
               onChangeText={(t) => { setUsername(t.replace(/\s/g, '').toLowerCase()); setSuccess(''); }}
               placeholder="ex: joao.silva"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -157,13 +158,13 @@ export default function PerfilScreen() {
             activeOpacity={0.85}
           >
             {saving
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={colors.brandText} />
               : <Text style={styles.saveTxt}>Salvar alterações</Text>}
           </TouchableOpacity>
 
           {/* Sair */}
           <TouchableOpacity style={styles.signOutBtn} onPress={confirmSignOut} activeOpacity={0.85}>
-            <Ionicons name="log-out-outline" size={18} color="#fca5a5" />
+            <Ionicons name="log-out-outline" size={18} color={colors.expenseText} />
             <Text style={styles.signOutTxt}>Sair da conta</Text>
           </TouchableOpacity>
 
@@ -175,7 +176,7 @@ export default function PerfilScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f0f1e' },
+  root: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   header: {
@@ -186,54 +187,54 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  headerTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
 
   scroll: { paddingHorizontal: 24, paddingTop: 8 },
 
   avatarWrap: { alignItems: 'center', marginBottom: 28 },
   avatar: {
     width: 88, height: 88, borderRadius: 44,
-    backgroundColor: '#e63946',
+    backgroundColor: colors.brand,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 10,
   },
-  avatarTxt: { color: '#fff', fontSize: 38, fontWeight: '800' },
-  handle: { color: '#888', fontSize: 14, fontWeight: '600' },
+  avatarTxt: { color: colors.brandText, fontSize: 38, fontWeight: '800' },
+  handle: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
 
   msgBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(239,68,68,0.12)',
-    borderWidth: 1, borderColor: 'rgba(239,68,68,0.35)',
+    backgroundColor: colors.dangerBg,
+    borderWidth: 1, borderColor: colors.dangerBorder,
     borderRadius: 10, padding: 12, marginBottom: 16,
   },
-  msgTxt: { color: '#fca5a5', fontSize: 13, flex: 1, lineHeight: 18 },
-  msgSuccess: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.35)' },
-  msgSuccessTxt: { color: '#86efac' },
+  msgTxt: { color: colors.expenseText, fontSize: 13, flex: 1, lineHeight: 18 },
+  msgSuccess: { backgroundColor: colors.successBg, borderColor: colors.successBorder },
+  msgSuccessTxt: { color: colors.successText },
 
   field: { marginBottom: 16 },
   fieldLabel: {
-    color: '#888', fontSize: 12, fontWeight: '700',
+    color: colors.textMuted, fontSize: 12, fontWeight: '700',
     letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6,
   },
   input: {
-    backgroundColor: '#1a1a2e',
-    borderWidth: 1, borderColor: '#2a2a4e',
+    backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.border,
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
-    color: '#fff', fontSize: 15,
+    color: colors.text, fontSize: 15,
   },
-  hint: { color: '#555', fontSize: 12, marginTop: 6 },
+  hint: { color: colors.textFaint, fontSize: 12, marginTop: 6 },
 
   saveBtn: {
-    backgroundColor: '#e63946', borderRadius: 14,
+    backgroundColor: colors.brand, borderRadius: 14,
     paddingVertical: 16, alignItems: 'center', marginTop: 8,
   },
-  saveTxt: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  saveTxt: { color: colors.brandText, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
   signOutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#1a1a2e',
-    borderWidth: 1, borderColor: 'rgba(239,68,68,0.35)',
+    backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.dangerBorder,
     borderRadius: 14, paddingVertical: 15, marginTop: 14,
   },
-  signOutTxt: { color: '#fca5a5', fontSize: 15, fontWeight: '700' },
+  signOutTxt: { color: colors.expenseText, fontSize: 15, fontWeight: '700' },
 });

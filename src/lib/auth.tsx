@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { generateDueRecurring } from './transactions';
 
 type AuthContextType = {
   session: Session | null;
@@ -43,6 +44,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  // Ao entrar/abrir o app com sessão válida, materializa as ocorrências de
+  // lançamentos recorrentes que já venceram. Fire-and-forget: nunca bloqueia a UI.
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    generateDueRecurring().catch(() => {});
+  }, [session?.user?.id]);
 
   async function signOut() {
     await supabase.auth.signOut();

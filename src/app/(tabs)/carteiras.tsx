@@ -12,6 +12,7 @@ import {
   listAccountsWithBalance, createAccount, updateAccount, archiveAccount,
   listArchivedAccounts, restoreAccount, deleteAccount,
 } from '../../lib/accounts';
+import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────
 function formatBRL(value: number): string {
@@ -32,6 +33,7 @@ const PRESET_COLORS = [
 // ── Componente ────────────────────────────────────────────────────────
 export default function CarteirasScreen() {
   const [accounts, setAccounts]       = useState<AccountWithBalance[]>([]);
+  const [search, setSearch]           = useState('');
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -190,11 +192,16 @@ export default function CarteirasScreen() {
   // ── Totais ───────────────────────────────────────────────────────────
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
 
+  // ── Busca por nome ───────────────────────────────────────────────────
+  const visibleAccounts = accounts.filter((a) =>
+    a.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
   // ── Loading inicial ──────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#e63946" />
+        <ActivityIndicator size="large" color={colors.text} />
       </View>
     );
   }
@@ -208,10 +215,10 @@ export default function CarteirasScreen() {
         <Text style={styles.headerTitle}>Carteiras</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.ghostBtn} onPress={openArchived} activeOpacity={0.8}>
-            <Ionicons name="archive-outline" size={20} color="#888" />
+            <Ionicons name="archive-outline" size={20} color={colors.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.addBtn} onPress={openCreate} activeOpacity={0.8}>
-            <Ionicons name="add" size={22} color="#fff" />
+            <Ionicons name="add" size={22} color={colors.brandText} />
           </TouchableOpacity>
         </View>
       </View>
@@ -227,11 +234,26 @@ export default function CarteirasScreen() {
         </Text>
       </View>
 
+      {/* Busca */}
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={16} color={colors.textFaint} />
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar..."
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+      </View>
+
       {/* Lista */}
       <FlatList
-        data={accounts}
+        data={visibleAccounts}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={accounts.length === 0 ? styles.listEmpty : styles.listContent}
+        contentContainerStyle={visibleAccounts.length === 0 ? styles.listEmpty : styles.listContent}
         onRefresh={() => { setRefreshing(true); load(true); }}
         refreshing={refreshing}
         ListEmptyComponent={
@@ -276,7 +298,7 @@ export default function CarteirasScreen() {
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   style={styles.archiveBtn}
                 >
-                  <Ionicons name="archive-outline" size={16} color="#555" />
+                  <Ionicons name="archive-outline" size={16} color={colors.textFaint} />
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -312,7 +334,7 @@ export default function CarteirasScreen() {
               value={formName}
               onChangeText={setFormName}
               placeholder="Ex.: Nubank, Carteira, Poupança…"
-              placeholderTextColor="#4a4a6a"
+              placeholderTextColor={colors.placeholder}
               autoFocus
               returnKeyType="done"
             />
@@ -342,7 +364,7 @@ export default function CarteirasScreen() {
                     <Ionicons
                       name={ACCOUNT_TYPE_ICONS[t] as any}
                       size={14}
-                      color={active ? '#fff' : '#888'}
+                      color={active ? colors.text : colors.textMuted}
                     />
                     <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
                       {ACCOUNT_TYPE_LABELS[t]}
@@ -362,7 +384,7 @@ export default function CarteirasScreen() {
                   onChangeText={setFormBalance}
                   keyboardType="decimal-pad"
                   placeholder="0,00"
-                  placeholderTextColor="#4a4a6a"
+                  placeholderTextColor={colors.placeholder}
                   returnKeyType="done"
                 />
                 <Text style={styles.fieldHint}>
@@ -399,7 +421,7 @@ export default function CarteirasScreen() {
                 disabled={saving}
               >
                 {saving
-                  ? <ActivityIndicator size="small" color="#fff" />
+                  ? <ActivityIndicator size="small" color={colors.brandText} />
                   : <Text style={styles.btnSaveTxt}>{editingId ? 'Salvar' : 'Criar'}</Text>
                 }
               </TouchableOpacity>
@@ -424,7 +446,7 @@ export default function CarteirasScreen() {
 
           {archivedLoading ? (
             <View style={{ paddingVertical: 40 }}>
-              <ActivityIndicator color="#e63946" />
+              <ActivityIndicator color={colors.text} />
             </View>
           ) : archived.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: 'center' }}>
@@ -449,7 +471,7 @@ export default function CarteirasScreen() {
                       onPress={() => handleRestore(item)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="refresh" size={16} color="#22c55e" />
+                      <Ionicons name="refresh" size={16} color={colors.income} />
                       <Text style={styles.restoreTxt}>Restaurar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -457,7 +479,7 @@ export default function CarteirasScreen() {
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={styles.deleteBtn}
                     >
-                      <Ionicons name="trash-outline" size={18} color="#e63946" />
+                      <Ionicons name="trash-outline" size={18} color={colors.expense} />
                     </TouchableOpacity>
                   </View>
                 );
@@ -480,18 +502,18 @@ export default function CarteirasScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1e',
+    backgroundColor: colors.bg,
   },
   centered: {
     flex: 1,
-    backgroundColor: '#0f0f1e',
+    backgroundColor: colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   // Header
   header: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     paddingTop: 56,
     paddingBottom: 14,
     paddingHorizontal: 20,
@@ -499,10 +521,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a4e',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '700',
     letterSpacing: 0.4,
@@ -517,7 +539,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -525,9 +547,30 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#e63946',
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Busca
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: font.size.md,
+    padding: 0,
   },
 
   // Linha de carteira arquivada
@@ -537,7 +580,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a4e',
+    borderBottomColor: colors.border,
   },
   restoreBtn: {
     flexDirection: 'row',
@@ -547,10 +590,10 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.4)',
+    borderColor: alpha(colors.income, 0.4),
   },
   restoreTxt: {
-    color: '#22c55e',
+    color: colors.income,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -562,15 +605,15 @@ const styles = StyleSheet.create({
   totalCard: {
     margin: 16,
     marginBottom: 8,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
   },
   totalLabel: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -578,13 +621,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   totalValue: {
-    color: '#22c55e',
+    color: colors.income,
     fontSize: 32,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
   totalSub: {
-    color: '#555',
+    color: colors.textFaint,
     fontSize: 12,
     marginTop: 6,
   },
@@ -602,7 +645,7 @@ const styles = StyleSheet.create({
 
   // Card de conta
   card: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderLeftWidth: 4,
     padding: 14,
@@ -610,7 +653,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
   },
   iconWrap: {
     width: 44,
@@ -625,12 +668,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   cardName: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '600',
   },
   cardType: {
-    color: '#666',
+    color: colors.textFaint,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -640,7 +683,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   cardBalance: {
-    color: '#22c55e',
+    color: colors.income,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -648,7 +691,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   negative: {
-    color: '#e63946',
+    color: colors.expense,
   },
 
   // Empty state
@@ -663,13 +706,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   emptyTitle: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 8,
   },
   emptySub: {
-    color: '#666',
+    color: colors.textFaint,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
@@ -681,31 +724,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.65)',
   },
   sheet: {
-    backgroundColor: '#12122a',
+    backgroundColor: colors.surfaceAlt,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 12,
     maxHeight: '85%',
     borderTopWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
   },
   sheetHandle: {
     width: 40,
     height: 4,
-    backgroundColor: '#333',
+    backgroundColor: colors.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 20,
   },
   sheetTitle: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 20,
   },
   fieldLabel: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -714,19 +757,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   fieldHint: {
-    color: '#555',
+    color: colors.textFaint,
     fontSize: 12,
     marginTop: 4,
     marginBottom: 4,
   },
   input: {
-    backgroundColor: '#1e1e3a',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    color: '#fff',
+    color: colors.text,
     fontSize: 15,
     marginBottom: 16,
   },
@@ -743,17 +786,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
-    backgroundColor: '#1e1e3a',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     marginRight: 8,
   },
   chipLabel: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   chipLabelActive: {
-    color: '#fff',
+    color: colors.text,
   },
 
   // Cores
@@ -771,7 +814,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   colorDotActive: {
-    borderColor: '#fff',
+    borderColor: colors.text,
     transform: [{ scale: 1.15 }],
   },
 
@@ -786,11 +829,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2a2a4e',
+    borderColor: colors.border,
     alignItems: 'center',
   },
   btnCancelTxt: {
-    color: '#888',
+    color: colors.textMuted,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -798,11 +841,11 @@ const styles = StyleSheet.create({
     flex: 2,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#e63946',
+    backgroundColor: colors.brand,
     alignItems: 'center',
   },
   btnSaveTxt: {
-    color: '#fff',
+    color: colors.brandText,
     fontWeight: '700',
     fontSize: 15,
   },

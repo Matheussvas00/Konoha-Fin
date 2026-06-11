@@ -2,17 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Modal, TextInput, Alert, RefreshControl, StatusBar,
-  ScrollView, KeyboardAvoidingView, Platform, Switch,
+  ScrollView, KeyboardAvoidingView, Platform, Switch, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
-  TransactionType, TransactionRow,
+  TransactionType, TransactionRow, RecurrencePattern,
   listTransactions, createTransaction, updateTransaction,
   deleteTransaction, toggleStatus, currentMonth, CreateTransactionInput,
 } from '../../lib/transactions';
 import { Category, listCategories } from '../../lib/categories';
 import { AccountWithBalance, listAccountsWithBalance } from '../../lib/accounts';
+import { exportTransactionsCSV } from '../../lib/export';
+import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -36,9 +38,9 @@ const TYPE_LABELS: Record<TransactionType, string> = {
 };
 
 const TYPE_COLORS: Record<TransactionType, string> = {
-  income:   '#22c55e',
-  expense:  '#f87171',
-  transfer: '#60a5fa',
+  income:   colors.income,
+  expense:  colors.expense,
+  transfer: colors.transfer,
 };
 
 const TYPE_ICONS: Record<TransactionType, string> = {
@@ -46,6 +48,16 @@ const TYPE_ICONS: Record<TransactionType, string> = {
   expense:  'arrow-up-circle-outline',
   transfer: 'swap-horizontal-outline',
 };
+
+const RECURRENCE_OPTS: { key: RecurrencePattern | 'none'; label: string }[] = [
+  { key: 'none',      label: 'Não repete' },
+  { key: 'daily',     label: 'Diário' },
+  { key: 'weekly',    label: 'Semanal' },
+  { key: 'biweekly',  label: 'Quinzenal' },
+  { key: 'monthly',   label: 'Mensal' },
+  { key: 'quarterly', label: 'Trimestral' },
+  { key: 'annual',    label: 'Anual' },
+];
 
 // ── Picker simples ─────────────────────────────────────────────────────
 
@@ -81,7 +93,7 @@ function PickerModal({
                   {item.name}
                 </Text>
                 {selected === item.id && (
-                  <Ionicons name="checkmark" size={18} color="#e63946" />
+                  <Ionicons name="checkmark" size={18} color={colors.text} />
                 )}
               </TouchableOpacity>
             ))}
@@ -95,21 +107,21 @@ function PickerModal({
 const pm = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
-    backgroundColor: '#1a1a2e', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingBottom: 32, maxHeight: '60%',
   },
   handle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: '#333',
+    width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border,
     alignSelf: 'center', marginTop: 12, marginBottom: 16,
   },
-  title: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 12 },
+  title: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 12 },
   item: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a4e',
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   dot: { width: 12, height: 12, borderRadius: 6 },
-  itemTxt: { flex: 1, color: '#aaa', fontSize: 15 },
-  itemTxtActive: { color: '#fff', fontWeight: '600' },
+  itemTxt: { flex: 1, color: colors.textMuted, fontSize: 15 },
+  itemTxtActive: { color: colors.text, fontWeight: '600' },
 });
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -120,10 +132,14 @@ export default function LancamentosScreen() {
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
+  const [exporting, setExporting]       = useState(false);
 
   // filtros
-  const [month, setMonth]           = useState(currentMonth());
-  const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');
+  const [month, setMonth]                       = useState(currentMonth());
+  const [filterType, setFilterType]             = useState<TransactionType | 'all'>('all');
+  const [search, setSearch]                     = useState('');
+  const [categoryFilterId, setCategoryFilterId] = useState('');
+  const [showCatFilter, setShowCatFilter]       = useState(false);
 
   // dados auxiliares
   const [accounts, setAccounts]     = useState<AccountWithBalance[]>([]);
@@ -143,6 +159,8 @@ export default function LancamentosScreen() {
   const [date, setDate]               = useState(todayISO());
   const [isPending, setIsPending]     = useState(false);
   const [notes, setNotes]             = useState('');
+  const [recurrence, setRecurrence]   = useState<RecurrencePattern | 'none'>('none');
+  const [recurrenceEnd, setRecurrenceEnd] = useState('');
   const [saving, setSaving]           = useState(false);
 
   // pickers
@@ -187,6 +205,8 @@ export default function LancamentosScreen() {
     setDate(todayISO());
     setIsPending(false);
     setNotes('');
+    setRecurrence('none');
+    setRecurrenceEnd('');
     setModalVisible(true);
   }
 
@@ -201,6 +221,8 @@ export default function LancamentosScreen() {
     setDate(tx.date);
     setIsPending(tx.status === 'pending');
     setNotes(tx.notes ?? '');
+    setRecurrence(tx.recurrence ?? 'none');
+    setRecurrenceEnd(tx.recurrence_end ?? '');
     setModalVisible(true);
   }
 
@@ -217,6 +239,7 @@ export default function LancamentosScreen() {
 
     setSaving(true);
     try {
+      const recurring = !editing && recurrence !== 'none';
       const payload: CreateTransactionInput = {
         account_id:    accountId,
         category_id:   categoryId || undefined,
@@ -227,6 +250,8 @@ export default function LancamentosScreen() {
         amount,
         date,
         notes: notes.trim() || undefined,
+        recurrence:     recurring ? (recurrence as RecurrencePattern) : undefined,
+        recurrence_end: recurring && recurrenceEnd.trim() ? recurrenceEnd.trim() : undefined,
       };
 
       if (editing) {
@@ -273,6 +298,27 @@ export default function LancamentosScreen() {
     } catch (e: any) { Alert.alert('Erro', e.message); }
   }
 
+  // ── Exportar ──────────────────────────────────────────────────────
+
+  async function handleExport() {
+    if (exporting) return;
+    if (filtered.length === 0) {
+      Alert.alert('Exportar', 'Não há lançamentos para exportar.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const res = await exportTransactionsCSV(filtered, `lancamentos-${month}`);
+      if (!res.shared) {
+        Alert.alert('CSV gerado', `Arquivo salvo em:\n${res.uri ?? ''}`);
+      }
+    } catch (e: any) {
+      Alert.alert('Erro ao exportar', e.message ?? String(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   // ── Navegação de mês ──────────────────────────────────────────────
 
   function shiftMonth(delta: number) {
@@ -289,9 +335,16 @@ export default function LancamentosScreen() {
 
   // ── Dados filtrados e resumo ──────────────────────────────────────
 
-  const filtered = filterType === 'all'
-    ? transactions
-    : transactions.filter((t) => t.type === filterType);
+  const q = search.trim().toLowerCase();
+  const filtered = transactions.filter((t) => {
+    if (filterType !== 'all' && t.type !== filterType) return false;
+    if (categoryFilterId && t.category_id !== categoryFilterId) return false;
+    if (q) {
+      const hay = `${t.description} ${t.category_name ?? ''} ${t.notes ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
 
   const filteredCats = categories.filter((c) =>
     txType === 'transfer' || c.type === (txType === 'income' ? 'income' : 'expense')
@@ -301,6 +354,9 @@ export default function LancamentosScreen() {
   const income   = effected.filter((t) => t.type === 'income' ).reduce((s, t) => s + t.amount, 0);
   const expense  = effected.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
+  const categoryFilterName =
+    categories.find((c) => c.id === categoryFilterId)?.name ?? '';
+
   // ── Render ────────────────────────────────────────────────────────
   return (
     <View style={s.root}>
@@ -309,19 +365,24 @@ export default function LancamentosScreen() {
       {/* Header */}
       <View style={s.header}>
         <Text style={s.headerTitle}>Lançamentos</Text>
+        <TouchableOpacity onPress={handleExport} style={s.catBtn} disabled={exporting}>
+          {exporting
+            ? <ActivityIndicator size="small" color={colors.textMuted} />
+            : <Ionicons name="download-outline" size={20} color={colors.textMuted} />}
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/(tabs)/categorias')} style={s.catBtn}>
-          <Ionicons name="pricetag-outline" size={20} color="#aaa" />
+          <Ionicons name="pricetag-outline" size={20} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
       {/* Navegador de mês */}
       <View style={s.monthNav}>
         <TouchableOpacity onPress={() => shiftMonth(-1)} style={s.monthArrow}>
-          <Ionicons name="chevron-back" size={20} color="#aaa" />
+          <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
         </TouchableOpacity>
         <Text style={s.monthLabel}>{monthLabel()}</Text>
         <TouchableOpacity onPress={() => shiftMonth(1)} style={s.monthArrow}>
-          <Ionicons name="chevron-forward" size={20} color="#aaa" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -329,18 +390,47 @@ export default function LancamentosScreen() {
       <View style={s.summaryRow}>
         <View style={s.summaryCard}>
           <Text style={s.summaryLabel}>Entradas</Text>
-          <Text style={[s.summaryValue, { color: '#22c55e' }]}>{formatBRL(income)}</Text>
+          <Text style={[s.summaryValue, { color: colors.income }]}>{formatBRL(income)}</Text>
         </View>
         <View style={s.summaryCard}>
           <Text style={s.summaryLabel}>Saídas</Text>
-          <Text style={[s.summaryValue, { color: '#f87171' }]}>{formatBRL(expense)}</Text>
+          <Text style={[s.summaryValue, { color: colors.expense }]}>{formatBRL(expense)}</Text>
         </View>
         <View style={s.summaryCard}>
           <Text style={s.summaryLabel}>Saldo</Text>
-          <Text style={[s.summaryValue, { color: income - expense < 0 ? '#f87171' : '#fff' }]}>
+          <Text style={[s.summaryValue, { color: income - expense < 0 ? colors.expense : colors.text }]}>
             {formatBRL(income - expense)}
           </Text>
         </View>
+      </View>
+
+      {/* Busca + filtro de categoria */}
+      <View style={s.toolsRow}>
+        <View style={s.searchBox}>
+          <Ionicons name="search" size={16} color={colors.textFaint} />
+          <TextInput
+            style={s.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Buscar lançamento…"
+            placeholderTextColor={colors.placeholder}
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.textFaint} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          style={[s.catFilterBtn, categoryFilterId ? s.catFilterBtnActive : null]}
+          onPress={() => setShowCatFilter(true)}
+        >
+          <Ionicons
+            name="pricetag"
+            size={16}
+            color={categoryFilterId ? colors.brandText : colors.textMuted}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Filtros de tipo */}
@@ -357,6 +447,12 @@ export default function LancamentosScreen() {
             </Text>
           </TouchableOpacity>
         ))}
+        {categoryFilterId ? (
+          <TouchableOpacity style={[s.chip, s.chipCat]} onPress={() => setCategoryFilterId('')}>
+            <Text style={s.chipCatTxt} numberOfLines={1}>{categoryFilterName}</Text>
+            <Ionicons name="close" size={13} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
 
       {/* Lista */}
@@ -365,14 +461,18 @@ export default function LancamentosScreen() {
         keyExtractor={(t) => t.id}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
-            tintColor="#e63946" colors={['#e63946']} />
+            tintColor={colors.text} colors={[colors.text]} />
         }
         contentContainerStyle={[s.list, filtered.length === 0 && s.listEmpty]}
         ListEmptyComponent={
           <View style={s.empty}>
-            <Ionicons name="receipt-outline" size={48} color="#333" />
+            <Ionicons name="receipt-outline" size={48} color={colors.border} />
             <Text style={s.emptyTxt}>
-              {loading ? 'Carregando…' : 'Nenhum lançamento neste mês'}
+              {loading
+                ? 'Carregando…'
+                : (search || categoryFilterId || filterType !== 'all')
+                  ? 'Nenhum lançamento encontrado'
+                  : 'Nenhum lançamento neste mês'}
             </Text>
             <TouchableOpacity onPress={() => openCreate()} style={s.emptyBtn}>
               <Text style={s.emptyBtnTxt}>+ Adicionar</Text>
@@ -383,6 +483,7 @@ export default function LancamentosScreen() {
           const color = TYPE_COLORS[tx.type];
           const icon  = TYPE_ICONS[tx.type];
           const sign  = tx.type === 'income' ? '+' : tx.type === 'transfer' ? '↔ ' : '-';
+          const isRecurring = !!tx.recurrence || !!tx.recurring_parent;
           return (
             <TouchableOpacity
               style={[s.txCard, tx.status === 'pending' && s.txPending]}
@@ -391,28 +492,34 @@ export default function LancamentosScreen() {
               activeOpacity={0.75}
             >
               <TouchableOpacity
-                style={[s.txIconWrap, { backgroundColor: color + '18' }]}
+                style={[s.txIconWrap, { backgroundColor: alpha(color, 0.12) }]}
                 onPress={() => handleToggle(tx)}
               >
                 <Ionicons
                   name={(tx.status === 'pending' ? 'time-outline' : icon) as any}
                   size={20}
-                  color={tx.status === 'pending' ? '#555' : color}
+                  color={tx.status === 'pending' ? colors.textFaint : color}
                 />
               </TouchableOpacity>
 
               <View style={s.txInfo}>
-                <Text style={[s.txDesc, tx.status === 'pending' && { color: '#666' }]}
+                <Text style={[s.txDesc, tx.status === 'pending' && { color: colors.textFaint }]}
                   numberOfLines={1}>{tx.description}</Text>
-                <Text style={s.txMeta}>
-                  {tx.category_name ?? tx.account_name ?? '—'}
-                  {tx.type === 'transfer' && tx.to_account_name
-                    ? ` → ${tx.to_account_name}` : ''}
-                  {' · '}{fmtDate(tx.date)}
-                </Text>
+                <View style={s.txMetaRow}>
+                  {isRecurring && (
+                    <Ionicons name="repeat" size={11} color={colors.textFaint}
+                      style={{ marginRight: 4 }} />
+                  )}
+                  <Text style={s.txMeta} numberOfLines={1}>
+                    {tx.category_name ?? tx.account_name ?? '—'}
+                    {tx.type === 'transfer' && tx.to_account_name
+                      ? ` → ${tx.to_account_name}` : ''}
+                    {' · '}{fmtDate(tx.date)}
+                  </Text>
+                </View>
               </View>
 
-              <Text style={[s.txAmount, { color: tx.status === 'pending' ? '#555' : color }]}>
+              <Text style={[s.txAmount, { color: tx.status === 'pending' ? colors.textFaint : color }]}>
                 {sign}{formatBRL(tx.amount)}
               </Text>
             </TouchableOpacity>
@@ -423,14 +530,14 @@ export default function LancamentosScreen() {
       {/* FAB */}
       <View style={s.fab}>
         <TouchableOpacity style={[s.fabBtn, s.fabTransfer]} onPress={() => openCreate('transfer')}>
-          <Ionicons name="swap-horizontal" size={18} color="#fff" />
+          <Ionicons name="swap-horizontal" size={18} color={colors.text} />
         </TouchableOpacity>
         <TouchableOpacity style={[s.fabBtn, s.fabIncome]} onPress={() => openCreate('income')}>
-          <Ionicons name="add" size={18} color="#fff" />
+          <Ionicons name="add" size={18} color={colors.text} />
           <Text style={s.fabTxt}>Receita</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[s.fabBtn, s.fabExpense]} onPress={() => openCreate('expense')}>
-          <Ionicons name="remove" size={18} color="#fff" />
+          <Ionicons name="remove" size={18} color={colors.text} />
           <Text style={s.fabTxt}>Despesa</Text>
         </TouchableOpacity>
       </View>
@@ -460,14 +567,14 @@ export default function LancamentosScreen() {
                         style={[
                           s.typeBtn,
                           txType === t && {
-                            backgroundColor: TYPE_COLORS[t] + '33',
+                            backgroundColor: alpha(TYPE_COLORS[t], 0.2),
                             borderColor: TYPE_COLORS[t],
                           },
                         ]}
                         onPress={() => setTxType(t)}
                       >
                         <Ionicons name={TYPE_ICONS[t] as any} size={16}
-                          color={txType === t ? TYPE_COLORS[t] : '#555'} />
+                          color={txType === t ? TYPE_COLORS[t] : colors.textFaint} />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -481,7 +588,7 @@ export default function LancamentosScreen() {
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Ex.: Supermercado"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
               />
 
               {/* Valor */}
@@ -491,7 +598,7 @@ export default function LancamentosScreen() {
                 value={amountStr}
                 onChangeText={setAmountStr}
                 placeholder="0,00"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 keyboardType="decimal-pad"
               />
 
@@ -503,7 +610,7 @@ export default function LancamentosScreen() {
                 <Text style={accountId ? s.pickerTxt : s.pickerPh}>
                   {accounts.find((a) => a.id === accountId)?.name ?? 'Selecionar conta…'}
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color="#555" />
+                <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
               </TouchableOpacity>
 
               {/* Conta destino */}
@@ -514,7 +621,7 @@ export default function LancamentosScreen() {
                     <Text style={toAccountId ? s.pickerTxt : s.pickerPh}>
                       {accounts.find((a) => a.id === toAccountId)?.name ?? 'Selecionar conta…'}
                     </Text>
-                    <Ionicons name="chevron-forward" size={16} color="#555" />
+                    <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
                   </TouchableOpacity>
                 </>
               )}
@@ -527,7 +634,7 @@ export default function LancamentosScreen() {
                     <Text style={categoryId ? s.pickerTxt : s.pickerPh}>
                       {filteredCats.find((c) => c.id === categoryId)?.name ?? 'Sem categoria'}
                     </Text>
-                    <Ionicons name="chevron-forward" size={16} color="#555" />
+                    <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
                   </TouchableOpacity>
                 </>
               )}
@@ -539,7 +646,7 @@ export default function LancamentosScreen() {
                 value={date}
                 onChangeText={setDate}
                 placeholder="2025-06-07"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 keyboardType="numeric"
                 maxLength={10}
               />
@@ -553,10 +660,55 @@ export default function LancamentosScreen() {
                 <Switch
                   value={isPending}
                   onValueChange={setIsPending}
-                  trackColor={{ false: '#2a2a4e', true: '#e63946' }}
-                  thumbColor="#fff"
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  thumbColor={isPending ? colors.brandText : colors.textMuted}
                 />
               </View>
+
+              {/* Recorrência (apenas na criação) */}
+              {!editing && (
+                <>
+                  <Text style={s.label}>Repetir</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={s.recRow} style={{ marginBottom: 16 }}>
+                    {RECURRENCE_OPTS.map((opt) => (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[s.recChip, recurrence === opt.key && s.recChipActive]}
+                        onPress={() => setRecurrence(opt.key)}
+                      >
+                        <Text style={[s.recChipTxt, recurrence === opt.key && s.recChipTxtActive]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  {recurrence !== 'none' && (
+                    <>
+                      <Text style={s.label}>Repetir até (opcional, AAAA-MM-DD)</Text>
+                      <TextInput
+                        style={s.input}
+                        value={recurrenceEnd}
+                        onChangeText={setRecurrenceEnd}
+                        placeholder="vazio = sem fim"
+                        placeholderTextColor={colors.placeholder}
+                        keyboardType="numeric"
+                        maxLength={10}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {editing && !!editing.recurrence && (
+                <View style={s.recNote}>
+                  <Ionicons name="repeat" size={14} color={colors.textMuted} />
+                  <Text style={s.recNoteTxt}>
+                    Este é um lançamento recorrente ({TYPE_LABELS[editing.type].toLowerCase()}).
+                  </Text>
+                </View>
+              )}
 
               {/* Notas */}
               <Text style={s.label}>Notas (opcional)</Text>
@@ -565,7 +717,7 @@ export default function LancamentosScreen() {
                 value={notes}
                 onChangeText={setNotes}
                 placeholder="Observações…"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 multiline
                 numberOfLines={2}
               />
@@ -622,6 +774,17 @@ export default function LancamentosScreen() {
         onSelect={setCategoryId}
         onClose={() => setShowCatPicker(false)}
       />
+      <PickerModal
+        visible={showCatFilter}
+        title="Filtrar por categoria"
+        items={[
+          { id: '', name: 'Todas as categorias', color: null },
+          ...categories.map((c) => ({ id: c.id, name: c.name, color: c.color })),
+        ]}
+        selected={categoryFilterId}
+        onSelect={setCategoryFilterId}
+        onClose={() => setShowCatFilter(false)}
+      />
     </View>
   );
 }
@@ -629,65 +792,86 @@ export default function LancamentosScreen() {
 // ── Estilos ───────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f0f1e' },
+  root: { flex: 1, backgroundColor: colors.bg },
 
   header: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20,
     flexDirection: 'row', alignItems: 'center',
-    borderBottomWidth: 1, borderBottomColor: '#2a2a4e',
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '700' },
-  catBtn: { padding: 6 },
+  headerTitle: { flex: 1, color: colors.text, fontSize: 20, fontWeight: '700' },
+  catBtn: { padding: 6, marginLeft: 4 },
 
   monthNav: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: '#1a1a2e',
-    borderBottomWidth: 1, borderBottomColor: '#2a2a4e',
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   monthArrow: { padding: 6 },
   monthLabel: {
-    color: '#fff', fontSize: 15, fontWeight: '700', textTransform: 'capitalize',
+    color: colors.text, fontSize: 15, fontWeight: '700', textTransform: 'capitalize',
   },
 
-  summaryRow: { flexDirection: 'row', gap: 1, backgroundColor: '#2a2a4e' },
+  summaryRow: { flexDirection: 'row', gap: 1, backgroundColor: colors.border },
   summaryCard: {
-    flex: 1, backgroundColor: '#1a1a2e',
+    flex: 1, backgroundColor: colors.surface,
     alignItems: 'center', paddingVertical: 12,
   },
   summaryLabel: {
-    color: '#666', fontSize: 11, fontWeight: '700',
+    color: colors.textFaint, fontSize: 11, fontWeight: '700',
     textTransform: 'uppercase', letterSpacing: 0.4,
   },
-  summaryValue: { color: '#fff', fontSize: 13, fontWeight: '800', marginTop: 2 },
+  summaryValue: { color: colors.text, fontSize: 13, fontWeight: '800', marginTop: 2 },
+
+  toolsRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingTop: 12,
+  },
+  searchBox: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 10,
+  },
+  searchInput: { flex: 1, color: colors.text, fontSize: font.size.md, padding: 0 },
+  catFilterBtn: {
+    width: 42, height: 42, borderRadius: radius.md,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  catFilterBtnActive: { backgroundColor: colors.brand, borderColor: colors.brand },
 
   filterScroll: { maxHeight: 50 },
   filterContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, alignItems: 'center' },
   chip: {
     paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: 20, borderWidth: 1,
-    borderColor: '#2a2a4e', backgroundColor: '#1a1a2e',
+    borderColor: colors.border, backgroundColor: colors.surface,
   },
-  chipActive: { backgroundColor: '#e63946', borderColor: '#e63946' },
-  chipTxt: { color: '#888', fontSize: 13, fontWeight: '600' },
-  chipTxtActive: { color: '#fff' },
+  chipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  chipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  chipTxtActive: { color: colors.brandText },
+  chipCat: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 200,
+  },
+  chipCatTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600', flexShrink: 1 },
 
   list: { padding: 16, paddingBottom: 100, gap: 8 },
   listEmpty: { flex: 1 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 80 },
-  emptyTxt: { color: '#555', fontSize: 15 },
+  emptyTxt: { color: colors.textFaint, fontSize: 15 },
   emptyBtn: {
     marginTop: 4, paddingHorizontal: 20, paddingVertical: 10,
-    borderRadius: 10, backgroundColor: '#e63946',
+    borderRadius: 10, backgroundColor: colors.brand,
   },
-  emptyBtnTxt: { color: '#fff', fontWeight: '700' },
+  emptyBtnTxt: { color: colors.brandText, fontWeight: '700' },
 
   txCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#1a1a2e', borderRadius: 14,
-    borderWidth: 1, borderColor: '#2a2a4e', padding: 14,
+    backgroundColor: colors.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.border, padding: 14,
   },
   txPending: { opacity: 0.65, borderStyle: 'dashed' },
   txIconWrap: {
@@ -695,8 +879,9 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   txInfo: { flex: 1, gap: 3 },
-  txDesc: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  txMeta: { color: '#666', fontSize: 12 },
+  txDesc: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  txMetaRow: { flexDirection: 'row', alignItems: 'center' },
+  txMeta: { color: colors.textFaint, fontSize: 12, flexShrink: 1 },
   txAmount: { fontSize: 14, fontWeight: '800' },
 
   fab: {
@@ -710,70 +895,87 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3, shadowRadius: 4,
   },
-  fabIncome:   { backgroundColor: '#16a34a' },
-  fabExpense:  { backgroundColor: '#dc2626' },
-  fabTransfer: { backgroundColor: '#2563eb', paddingHorizontal: 12 },
-  fabTxt: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  fabIncome:   { backgroundColor: colors.incomeStrong },
+  fabExpense:  { backgroundColor: colors.expenseStrong },
+  fabTransfer: { backgroundColor: colors.borderStrong, paddingHorizontal: 12 },
+  fabTxt: { color: colors.text, fontSize: 13, fontWeight: '700' },
 
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
   sheet: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingBottom: 32,
     maxHeight: '92%',
   },
   handle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: '#333',
+    width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border,
     alignSelf: 'center', marginTop: 12, marginBottom: 16,
   },
   formHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', marginBottom: 20,
   },
-  sheetTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  sheetTitle: { color: colors.text, fontSize: 20, fontWeight: '800' },
   typeToggle: { flexDirection: 'row', gap: 8 },
   typeBtn: {
-    padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#2a2a4e',
+    padding: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
   },
 
   label: {
-    color: '#888', fontSize: 12, fontWeight: '700',
+    color: colors.textMuted, fontSize: 12, fontWeight: '700',
     letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8,
   },
   input: {
-    backgroundColor: '#0f0f1e', borderWidth: 1, borderColor: '#2a2a4e',
+    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
-    color: '#fff', fontSize: 15, marginBottom: 16,
+    color: colors.text, fontSize: 15, marginBottom: 16,
   },
   inputLarge: { fontSize: 26, fontWeight: '800', textAlign: 'center', letterSpacing: 1 },
   inputNotes: { minHeight: 60, textAlignVertical: 'top' },
 
   picker: {
-    backgroundColor: '#0f0f1e', borderWidth: 1, borderColor: '#2a2a4e',
+    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 15,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 16,
   },
-  pickerTxt: { color: '#fff', fontSize: 15 },
-  pickerPh:  { color: '#4a4a6a', fontSize: 15 },
+  pickerTxt: { color: colors.text, fontSize: 15 },
+  pickerPh:  { color: colors.placeholder, fontSize: 15 },
 
   switchRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#0f0f1e', borderWidth: 1, borderColor: '#2a2a4e',
+    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
     borderRadius: 12, padding: 14, marginBottom: 16, gap: 12,
   },
-  switchLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  switchSub:   { color: '#555', fontSize: 12, marginTop: 2 },
+  switchLabel: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  switchSub:   { color: colors.textFaint, fontSize: 12, marginTop: 2 },
+
+  recRow: { gap: 8, paddingRight: 4 },
+  recChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1,
+    borderColor: colors.border, backgroundColor: colors.bg,
+  },
+  recChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  recChipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  recChipTxtActive: { color: colors.brandText },
+
+  recNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
+    borderRadius: 12, padding: 12, marginBottom: 16,
+  },
+  recNoteTxt: { color: colors.textMuted, fontSize: 12, flex: 1 },
 
   sheetBtns: { flexDirection: 'row', gap: 12, marginTop: 4, marginBottom: 8 },
   cancelBtn: {
     flex: 1, paddingVertical: 14, borderRadius: 12,
-    borderWidth: 1, borderColor: '#2a2a4e', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, alignItems: 'center',
   },
-  cancelTxt: { color: '#888', fontWeight: '700' },
+  cancelTxt: { color: colors.textMuted, fontWeight: '700' },
   saveBtn: {
     flex: 2, paddingVertical: 14, borderRadius: 12,
-    backgroundColor: '#e63946', alignItems: 'center',
+    backgroundColor: colors.brand, alignItems: 'center',
   },
-  saveTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  saveTxt: { color: colors.brandText, fontWeight: '700', fontSize: 15 },
 });

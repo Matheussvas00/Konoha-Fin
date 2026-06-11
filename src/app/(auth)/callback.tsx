@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 /**
  * Rota web: /callback
@@ -31,9 +32,9 @@ export default function AuthCallback() {
   }, []);
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f0f1e', gap: 16 }}>
-      <ActivityIndicator size="large" color="#e63946" />
-      <Text style={{ color: '#888', fontSize: 14 }}>Confirmando sua conta…</Text>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg, gap: 16 }}>
+      <ActivityIndicator size="large" color={colors.text} />
+      <Text style={{ color: colors.textMuted, fontSize: 14 }}>Confirmando sua conta…</Text>
     </View>
   );
 }

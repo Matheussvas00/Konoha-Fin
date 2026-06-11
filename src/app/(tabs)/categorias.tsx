@@ -11,6 +11,7 @@ import {
   CATEGORY_COLORS, EXPENSE_ICONS, INCOME_ICONS,
   listCategories, createCategory, updateCategory, deleteCategory,
 } from '../../lib/categories';
+import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ export default function CategoriasScreen() {
 
   // filtro de tipo
   const [filterType, setFilterType] = useState<CategoryType | 'all'>('all');
+  const [search, setSearch] = useState('');
 
   // modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -94,7 +96,7 @@ export default function CategoriasScreen() {
   function confirmDelete(cat: Category) {
     Alert.alert(
       'Excluir categoria',
-      `Deseja excluir "${cat.name}"? Isso pode afetar lançamentos vinculados.`,
+      `Deseja excluir "${cat.name}"? Só é possível excluir categorias sem lançamentos ou orçamentos vinculados.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -113,9 +115,12 @@ export default function CategoriasScreen() {
     );
   }
 
-  const filtered = filterType === 'all'
-    ? categories
-    : categories.filter((c) => c.type === filterType);
+  const q = search.trim().toLowerCase();
+  const filtered = categories.filter(
+    (c) =>
+      (filterType === 'all' || c.type === filterType) &&
+      c.name.toLowerCase().includes(q)
+  );
 
   const icons = type === 'income' ? INCOME_ICONS : EXPENSE_ICONS;
 
@@ -127,11 +132,11 @@ export default function CategoriasScreen() {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Categorias</Text>
         <TouchableOpacity style={s.addBtn} onPress={openCreate}>
-          <Ionicons name="add" size={22} color="#fff" />
+          <Ionicons name="add" size={22} color={colors.brandText} />
         </TouchableOpacity>
       </View>
 
@@ -150,18 +155,33 @@ export default function CategoriasScreen() {
         ))}
       </View>
 
+      {/* Busca */}
+      <View style={s.searchBox}>
+        <Ionicons name="search" size={16} color={colors.textFaint} />
+        <TextInput
+          style={s.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar..."
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+      </View>
+
       {/* Lista */}
       <FlatList
         data={filtered}
         keyExtractor={(c) => c.id}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
-            tintColor="#e63946" colors={['#e63946']} />
+            tintColor={colors.text} colors={[colors.text]} />
         }
         contentContainerStyle={[s.list, filtered.length === 0 && s.listEmpty]}
         ListEmptyComponent={
           <View style={s.empty}>
-            <Ionicons name="pricetag-outline" size={48} color="#333" />
+            <Ionicons name="pricetag-outline" size={48} color={colors.border} />
             <Text style={s.emptyTxt}>
               {loading ? 'Carregando…' : 'Nenhuma categoria ainda'}
             </Text>
@@ -177,20 +197,20 @@ export default function CategoriasScreen() {
             onLongPress={() => confirmDelete(cat)}
             activeOpacity={0.75}
           >
-            <View style={[s.catIcon, { backgroundColor: (cat.color ?? '#555') + '22' }]}>
+            <View style={[s.catIcon, { backgroundColor: (cat.color ?? colors.textFaint) + '22' }]}>
               <Ionicons name={(cat.icon ?? 'ellipsis-horizontal-outline') as any}
-                size={20} color={cat.color ?? '#555'} />
+                size={20} color={cat.color ?? colors.textFaint} />
             </View>
             <View style={s.catInfo}>
               <Text style={s.catName}>{cat.name}</Text>
               <Text style={[
                 s.catType,
-                { color: cat.type === 'income' ? '#22c55e' : '#f87171' },
+                { color: cat.type === 'income' ? colors.income : colors.expense },
               ]}>
                 {TYPE_LABELS[cat.type]}
               </Text>
             </View>
-            <View style={[s.colorDot, { backgroundColor: cat.color ?? '#555' }]} />
+            <View style={[s.colorDot, { backgroundColor: cat.color ?? colors.textFaint }]} />
           </TouchableOpacity>
         )}
       />
@@ -217,7 +237,7 @@ export default function CategoriasScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Ex.: Alimentação"
-                placeholderTextColor="#4a4a6a"
+                placeholderTextColor={colors.placeholder}
                 maxLength={40}
               />
 
@@ -251,8 +271,8 @@ export default function CategoriasScreen() {
                     style={[s.iconOption, icon === ic && s.iconOptionActive]}
                     onPress={() => setIcon(ic)}
                   >
-                    <Ionicons name={ic as any} size={22} color={icon === ic ? '#fff' : '#888'} />
-                    <Text style={[s.iconLabel, icon === ic && { color: '#fff' }]}>{label}</Text>
+                    <Ionicons name={ic as any} size={22} color={icon === ic ? colors.brandText : colors.textMuted} />
+                    <Text style={[s.iconLabel, icon === ic && { color: colors.brandText }]}>{label}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -298,23 +318,23 @@ export default function CategoriasScreen() {
 // ── Estilos ───────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f0f1e' },
+  root: { flex: 1, backgroundColor: colors.bg },
 
   header: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     paddingTop: 56,
     paddingBottom: 16,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a4e',
+    borderBottomColor: colors.border,
   },
   backBtn: { padding: 4, marginRight: 8 },
-  headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '700' },
+  headerTitle: { flex: 1, color: colors.text, fontSize: 20, fontWeight: '700' },
   addBtn: {
     width: 36, height: 36, borderRadius: 10,
-    backgroundColor: '#e63946',
+    backgroundColor: colors.brand,
     alignItems: 'center', justifyContent: 'center',
   },
 
@@ -327,27 +347,48 @@ const s = StyleSheet.create({
   filterChip: {
     paddingHorizontal: 16, paddingVertical: 8,
     borderRadius: 20, borderWidth: 1,
-    borderColor: '#2a2a4e', backgroundColor: '#1a1a2e',
+    borderColor: colors.border, backgroundColor: colors.surface,
   },
-  filterChipActive: { backgroundColor: '#e63946', borderColor: '#e63946' },
-  filterChipTxt: { color: '#888', fontSize: 13, fontWeight: '600' },
-  filterChipTxtActive: { color: '#fff' },
+  filterChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  filterChipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  filterChipTxtActive: { color: colors.brandText },
+
+  // Busca
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginBottom: 4,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: font.size.md,
+    padding: 0,
+  },
 
   list: { padding: 16, gap: 8 },
   listEmpty: { flex: 1 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 80 },
-  emptyTxt: { color: '#555', fontSize: 15 },
+  emptyTxt: { color: colors.textFaint, fontSize: 15 },
   emptyBtn: {
     marginTop: 4, paddingHorizontal: 20, paddingVertical: 10,
-    borderRadius: 10, backgroundColor: '#e63946',
+    borderRadius: 10, backgroundColor: colors.brand,
   },
-  emptyBtnTxt: { color: '#fff', fontWeight: '700' },
+  emptyBtnTxt: { color: colors.brandText, fontWeight: '700' },
 
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#1a1a2e', borderRadius: 14,
-    borderWidth: 1, borderColor: '#2a2a4e',
+    backgroundColor: colors.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.border,
     padding: 14,
   },
   catIcon: {
@@ -355,7 +396,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   catInfo: { flex: 1 },
-  catName: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  catName: { color: colors.text, fontSize: 15, fontWeight: '600' },
   catType: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   colorDot: { width: 10, height: 10, borderRadius: 5 },
 
@@ -364,59 +405,59 @@ const s = StyleSheet.create({
     flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)',
   },
   sheet: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingBottom: 32,
     maxHeight: '90%',
   },
   handle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: '#333',
+    width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border,
     alignSelf: 'center', marginTop: 12, marginBottom: 20,
   },
-  sheetTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 20 },
+  sheetTitle: { color: colors.text, fontSize: 20, fontWeight: '800', marginBottom: 20 },
 
   label: {
-    color: '#888', fontSize: 12, fontWeight: '700',
+    color: colors.textMuted, fontSize: 12, fontWeight: '700',
     letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8,
   },
   input: {
-    backgroundColor: '#0f0f1e', borderWidth: 1, borderColor: '#2a2a4e',
+    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
-    color: '#fff', fontSize: 15, marginBottom: 18,
+    color: colors.text, fontSize: 15, marginBottom: 18,
   },
 
   typeRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   typeBtn: {
     flex: 1, paddingVertical: 11, borderRadius: 12,
-    borderWidth: 1, borderColor: '#2a2a4e', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, alignItems: 'center',
   },
-  typeBtnExpense: { backgroundColor: 'rgba(220,38,38,0.2)', borderColor: '#dc2626' },
-  typeBtnIncome:  { backgroundColor: 'rgba(22,163,74,0.2)',  borderColor: '#16a34a' },
-  typeBtnTxt: { color: '#666', fontWeight: '700' },
-  typeBtnTxtActive: { color: '#fff' },
+  typeBtnExpense: { backgroundColor: alpha(colors.expenseStrong, 0.2), borderColor: colors.expenseStrong },
+  typeBtnIncome:  { backgroundColor: alpha(colors.incomeStrong, 0.2),  borderColor: colors.incomeStrong },
+  typeBtnTxt: { color: colors.textFaint, fontWeight: '700' },
+  typeBtnTxtActive: { color: colors.text },
 
   iconScroll: { marginBottom: 18 },
   iconOption: {
     alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 10,
-    borderRadius: 12, borderWidth: 1, borderColor: '#2a2a4e',
-    backgroundColor: '#0f0f1e', minWidth: 64,
+    borderRadius: 12, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.bg, minWidth: 64,
   },
-  iconOptionActive: { backgroundColor: '#e63946', borderColor: '#e63946' },
-  iconLabel: { color: '#666', fontSize: 10, fontWeight: '600' },
+  iconOptionActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  iconLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '600' },
 
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
   colorSwatch: { width: 32, height: 32, borderRadius: 16 },
-  colorSwatchActive: { borderWidth: 3, borderColor: '#fff' },
+  colorSwatchActive: { borderWidth: 3, borderColor: colors.text },
 
   sheetBtns: { flexDirection: 'row', gap: 12 },
   cancelBtn: {
     flex: 1, paddingVertical: 14, borderRadius: 12,
-    borderWidth: 1, borderColor: '#2a2a4e', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, alignItems: 'center',
   },
-  cancelTxt: { color: '#888', fontWeight: '700' },
+  cancelTxt: { color: colors.textMuted, fontWeight: '700' },
   saveBtn: {
     flex: 2, paddingVertical: 14, borderRadius: 12,
-    backgroundColor: '#e63946', alignItems: 'center',
+    backgroundColor: colors.brand, alignItems: 'center',
   },
-  saveTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  saveTxt: { color: colors.brandText, fontWeight: '700', fontSize: 15 },
 });
