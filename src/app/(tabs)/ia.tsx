@@ -7,7 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 import { getAgentName, DEFAULT_AGENT_NAME } from '../../lib/agent';
-import { supabase } from '../../lib/supabase';
+import { askAgent } from '../../lib/aiClient';
 
 // ── Sugestões rápidas ──────────────────────────────────────────────────
 
@@ -56,10 +56,7 @@ export default function IAScreen() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('ai-assistant', {
-        body: { question: q, history, agentName },
-      });
-      if (error) throw error;
+      const data = await askAgent(q, history, agentName);
       const answer = (data?.answer ?? '').trim();
       setMessages((prev) => [
         ...prev,

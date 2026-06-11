@@ -1,0 +1,64 @@
+# Konoha Fin · Serviço de IA multiagente (Python + Google ADK)
+
+Backend do assistente financeiro, construído com o **Google Agent Development
+Kit (ADK)** e **Gemini**. É um serviço **FastAPI** separado (a ADK é Python e não
+roda nas Edge Functions do Supabase).
+
+## Arquitetura
+
+```
+Coordenador (roteia)
+   ├─▶ Analista  (leitura)  → ferramenta: obter_resumo_financeiro
+   └─▶ Operador  (escrita)  → ferramentas: criar_lancamento / criar_categoria /
+                                            criar_carteira / criar_meta
+```
+
+- `main.py` — API FastAPI (`POST /chat`), valida o JWT do usuário e aplica RLS.
+- `agents.py` — agentes ADK + ferramentas.
+- `context.py` — contexto por-requisição (cliente Supabase do usuário) e resumo.
+
+## Rodar localmente
+
+```bash
+cd ai-service
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # preencha GOOGLE_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY
+export $(grep -v '^#' .env | xargs)
+uvicorn main:app --reload --port 8080
+```
+
+Teste: `curl -X POST localhost:8080/chat -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"question":"como foram meus gastos?","agentName":"Konoha"}'`
+
+(O `<token>` é o `access_token` de um usuário logado — dá pra pegar no app.)
+
+## Deploy
+
+Qualquer host de container/Python serve. Variáveis a configurar:
+`GOOGLE_API_KEY`, `GOOGLE_GENAI_USE_VERTEXAI=FALSE`, `SUPABASE_URL`,
+`SUPABASE_ANON_KEY` (e opcional `GEMINI_MODEL`).
+
+### Render (mais simples)
+1. New → Web Service → aponte para este repositório, **Root Directory** `ai-service`.
+2. Environment: **Docker** (usa o `Dockerfile`) ou **Python** com
+   start `uvicorn main:app --host 0.0.0.0 --port $PORT`.
+3. Configure as variáveis acima. Pegue a URL pública (ex.: `https://konoha-ai.onrender.com`).
+
+### Google Cloud Run
+```bash
+gcloud run deploy konoha-ai --source ai-service --region us-central1 \
+  --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=FALSE,GEMINI_MODEL=gemini-2.0-flash \
+  --set-env-vars GOOGLE_API_KEY=...,SUPABASE_URL=...,SUPABASE_ANON_KEY=... \
+  --allow-unauthenticated
+```
+
+## Ligar o app
+
+No `.env` do app (raiz do projeto Expo), aponte para a URL do serviço:
+
+```
+EXPO_PUBLIC_AI_URL=https://sua-url-do-servico
+```
+
+O app (`src/app/(tabs)/ia.tsx` → `src/lib/aiClient.ts`) envia a pergunta com o
+token do usuário no header `Authorization`.

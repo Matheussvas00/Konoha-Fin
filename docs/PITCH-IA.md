@@ -67,11 +67,18 @@ expor números inventados.
 
 ## 5. Tecnologias
 
-- **Google Gemini** (`gemini-2.0-flash`) — raciocínio + _function calling_.
-- **Supabase Edge Functions** (Deno) — orquestra os agentes no servidor e
-  protege a API key.
-- **PostgreSQL + RLS** — cada agente só enxerga/escreve os dados do usuário.
+- **Google ADK (Agent Development Kit)** — framework de agentes em **Python**,
+  nativo para Gemini; define Coordenador/Analista/Operador e faz a delegação
+  entre agentes (_agent transfer_) e o _function calling_.
+- **Google Gemini** (`gemini-2.0-flash`) — raciocínio + chamada de ferramentas.
+- **FastAPI** (Python) — serviço HTTP que hospeda a orquestração e protege a API key.
+- **PostgreSQL + RLS (Supabase)** — cada agente só enxerga/escreve os dados do usuário.
 - **React Native (Expo)** — app cliente; tela de chat com selo de agente.
+
+> Nota de arquitetura: a ADK é Python, então a IA roda em um **serviço FastAPI
+> separado** (`ai-service/`), não nas Edge Functions do Supabase (que são Deno).
+> O Supabase segue como banco + autenticação + RLS. Há também uma implementação
+> equivalente em TypeScript/Deno em `supabase/functions/ai-assistant/` (alternativa).
 
 ## 6. Por que é um (bom) sistema multiagente
 
@@ -114,6 +121,8 @@ agente web, automações) use as mesmas capacidades financeiras — reaproveitan
 ---
 
 ### Onde está o código
-- Orquestração multiagente: `supabase/functions/ai-assistant/index.ts`
-- Cliente (chat + selo de agente): `src/app/(tabs)/ia.tsx`
+- Orquestração multiagente (Python + ADK): `ai-service/` (`agents.py`, `main.py`, `context.py`)
+- Deploy do serviço de IA: `ai-service/README.md`
+- Cliente (chat + selo de agente): `src/app/(tabs)/ia.tsx` → `src/lib/aiClient.ts`
 - Nome do agente (personalização): `src/lib/agent.ts` + tela de Perfil
+- Alternativa em TypeScript/Deno: `supabase/functions/ai-assistant/index.ts`
