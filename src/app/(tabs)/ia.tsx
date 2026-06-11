@@ -14,13 +14,20 @@ import { supabase } from '../../lib/supabase';
 const SUGGESTIONS = [
   'Como foram meus gastos este mês?',
   'Em que categoria gasto mais?',
-  'Quanto posso poupar por mês?',
+  'Lance uma despesa de R$ 50 no mercado pela carteira Nubank.',
   'Analise minha saúde financeira.',
 ];
 
 // ── Tipos ──────────────────────────────────────────────────────────────
 
-type Message = { role: 'user' | 'ai'; text: string };
+type AgentId = 'analista' | 'operador' | 'roteador';
+type Message = { role: 'user' | 'ai'; text: string; agent?: AgentId };
+
+const AGENT_LABELS: Record<AgentId, string> = {
+  analista: 'Analista',
+  operador: 'Operador',
+  roteador: 'Roteador',
+};
 
 // ── Screen ─────────────────────────────────────────────────────────────
 
@@ -56,7 +63,7 @@ export default function IAScreen() {
       const answer = (data?.answer ?? '').trim();
       setMessages((prev) => [
         ...prev,
-        { role: 'ai', text: answer || 'Não consegui gerar uma resposta agora.' },
+        { role: 'ai', text: answer || 'Não consegui gerar uma resposta agora.', agent: data?.agent },
       ]);
     } catch {
       setMessages((prev) => [
@@ -134,9 +141,21 @@ export default function IAScreen() {
                     <Ionicons name="sparkles" size={12} color={colors.text} />
                   </View>
                 )}
-                <Text style={[s.bubbleTxt, msg.role === 'user' && s.bubbleTxtUser]}>
-                  {msg.text}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  {msg.role === 'ai' && msg.agent && (
+                    <View style={s.agentBadge}>
+                      <Ionicons
+                        name={msg.agent === 'operador' ? 'create-outline' : 'analytics-outline'}
+                        size={10}
+                        color={colors.textFaint}
+                      />
+                      <Text style={s.agentBadgeTxt}>Agente {AGENT_LABELS[msg.agent]}</Text>
+                    </View>
+                  )}
+                  <Text style={[s.bubbleTxt, msg.role === 'user' && s.bubbleTxtUser]}>
+                    {msg.text}
+                  </Text>
+                </View>
               </View>
             ))
           )}
@@ -246,8 +265,15 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginTop: 1,
   },
-  bubbleTxt:     { color: colors.textMuted, fontSize: 14, lineHeight: 20, flex: 1 },
+  bubbleTxt:     { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
   bubbleTxtUser: { color: colors.brandText },
+  agentBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4,
+  },
+  agentBadgeTxt: {
+    color: colors.textFaint, fontSize: 10, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.4,
+  },
 
   inputRow: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
