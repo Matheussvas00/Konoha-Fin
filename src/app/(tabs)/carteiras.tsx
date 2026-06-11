@@ -313,8 +313,9 @@ export default function CarteirasScreen() {
         transparent
         onRequestClose={closeModal}
       >
+        <View style={styles.modalRoot}>
         {/* Fundo escuro clicável fecha o modal */}
-        <Pressable style={styles.overlay} onPress={closeModal} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeModal} />
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -430,6 +431,7 @@ export default function CarteirasScreen() {
             <View style={{ height: 40 }} />
           </ScrollView>
         </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* ── Modal de carteiras arquivadas ────────────────────────────── */}
@@ -439,7 +441,8 @@ export default function CarteirasScreen() {
         transparent
         onRequestClose={() => setArchivedVisible(false)}
       >
-        <Pressable style={styles.overlay} onPress={() => setArchivedVisible(false)} />
+        <View style={styles.modalRoot}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setArchivedVisible(false)} />
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>Carteiras arquivadas</Text>
@@ -492,6 +495,7 @@ export default function CarteirasScreen() {
             <Text style={styles.btnCancelTxt}>Fechar</Text>
           </TouchableOpacity>
           <View style={{ height: 28 }} />
+        </View>
         </View>
       </Modal>
     </View>
@@ -719,8 +723,9 @@ const styles = StyleSheet.create({
   },
 
   // Modal
-  overlay: {
+  modalRoot: {
     flex: 1,
+    justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.65)',
   },
   sheet: {

@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth';
 import {
   Profile, getMyProfile, updateMyProfile, validateUsername,
 } from '../../lib/profile';
+import { getAgentName, setAgentName as saveAgentName } from '../../lib/agent';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 export default function PerfilScreen() {
@@ -20,6 +21,8 @@ export default function PerfilScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
+  const [agentName, setAgentName] = useState('');
+  const [loadedAgent, setLoadedAgent] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -34,6 +37,9 @@ export default function PerfilScreen() {
       setProfile(p);
       setFullName(p?.full_name ?? '');
       setUsername(p?.username ?? '');
+      const an = await getAgentName();
+      setAgentName(an);
+      setLoadedAgent(an);
     } catch (e: any) {
       setError(e.message ?? 'Erro ao carregar perfil.');
     } finally {
@@ -45,7 +51,8 @@ export default function PerfilScreen() {
 
   const dirty =
     fullName.trim() !== (profile?.full_name ?? '') ||
-    username.trim() !== (profile?.username ?? '');
+    username.trim() !== (profile?.username ?? '') ||
+    agentName.trim() !== loadedAgent;
 
   async function handleSave() {
     setError(''); setSuccess('');
@@ -61,6 +68,9 @@ export default function PerfilScreen() {
         username: username.trim(),
       });
       setProfile(updated);
+      const savedAgent = await saveAgentName(agentName);
+      setAgentName(savedAgent);
+      setLoadedAgent(savedAgent);
       setSuccess('Perfil atualizado com sucesso!');
     } catch (e: any) {
       setError(e.message ?? 'Erro ao salvar.');
@@ -148,6 +158,20 @@ export default function PerfilScreen() {
               autoCorrect={false}
             />
             <Text style={styles.hint}>Use este nome para entrar no app.</Text>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Nome do assistente (IA)</Text>
+            <TextInput
+              style={styles.input}
+              value={agentName}
+              onChangeText={(t) => { setAgentName(t); setSuccess(''); }}
+              placeholder="Ex.: Konoha, Sofia, Jarvis…"
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="words"
+              maxLength={24}
+            />
+            <Text style={styles.hint}>Como o assistente de IA vai se chamar.</Text>
           </View>
 
           {/* Salvar */}

@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, KeyboardAvoidingView, Platform, StatusBar, ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
+import { getAgentName, DEFAULT_AGENT_NAME } from '../../lib/agent';
 
 // ── Sugestões rápidas ──────────────────────────────────────────────────
 
@@ -25,6 +27,17 @@ export default function IAScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [agentName, setAgentName] = useState(DEFAULT_AGENT_NAME);
+
+  // Recarrega o nome do agente sempre que a tela ganha foco (reflete o que foi
+  // definido no Perfil).
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getAgentName().then((n) => { if (active) setAgentName(n); });
+      return () => { active = false; };
+    }, [])
+  );
 
   async function send(text: string) {
     if (!text.trim() || loading) return;
@@ -57,8 +70,8 @@ export default function IAScreen() {
           <Ionicons name="sparkles" size={18} color={colors.text} />
         </View>
         <View>
-          <Text style={s.headerTitle}>Assistente IA</Text>
-          <Text style={s.headerSub}>Powered by Gemini · Em breve</Text>
+          <Text style={s.headerTitle}>{agentName}</Text>
+          <Text style={s.headerSub}>Seu assistente financeiro · Em breve</Text>
         </View>
       </View>
 
@@ -78,7 +91,7 @@ export default function IAScreen() {
               <View style={s.emptyIcon}>
                 <Ionicons name="sparkles-outline" size={40} color={colors.text} />
               </View>
-              <Text style={s.emptyTitle}>Olá! Sou seu assistente financeiro.</Text>
+              <Text style={s.emptyTitle}>Olá! Sou {agentName}, seu assistente financeiro.</Text>
               <Text style={s.emptySub}>
                 Vou analisar seus dados e responder perguntas sobre suas finanças.
               </Text>

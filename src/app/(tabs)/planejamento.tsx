@@ -663,8 +663,9 @@ const s = StyleSheet.create({
   },
 
   // Modal
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)' },
   sheet: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
     backgroundColor: colors.surfaceAlt, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingTop: 12, maxHeight: '88%',
     borderTopWidth: 1, borderColor: colors.border,

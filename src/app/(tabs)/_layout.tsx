@@ -53,20 +53,21 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="ia"
-        options={{
-          title: 'IA',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name={'sparkles-outline' as IconName} size={size} color={color as string} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="categorias"
         options={{
           title: 'Categorias',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name={'pricetags-outline' as IconName} size={size} color={color as string} />
+          ),
+        }}
+      />
+      {/* IA sempre na extrema direita do menu */}
+      <Tabs.Screen
+        name="ia"
+        options={{
+          title: 'IA',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={'sparkles-outline' as IconName} size={size} color={color as string} />
           ),
         }}
       />
