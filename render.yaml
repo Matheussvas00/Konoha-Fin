@@ -1,0 +1,22 @@
+# Render Blueprint para o serviço de IA (Python + Google ADK).
+# Deploy: no Render, "New +" → "Blueprint" → aponte para este repositório.
+# As variáveis com `sync: false` você preenche no painel (NÃO ficam no repo).
+services:
+  - type: web
+    name: konoha-ai
+    runtime: docker
+    rootDir: ai-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GOOGLE_GENAI_USE_VERTEXAI
+        value: "FALSE"
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: GOOGLE_API_KEY      # segredo — preencher no painel do Render
+        sync: false
+      - key: SUPABASE_URL        # segredo — preencher no painel do Render
+        sync: false
+      - key: SUPABASE_ANON_KEY   # segredo — preencher no painel do Render
+        sync: false

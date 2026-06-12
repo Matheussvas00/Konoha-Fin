@@ -39,10 +39,22 @@ Qualquer host de container/Python serve. Variáveis a configurar:
 `SUPABASE_ANON_KEY` (e opcional `GEMINI_MODEL`).
 
 ### Render (mais simples)
+
+**Opção A — Blueprint (1 clique):** existe um `render.yaml` na raiz do repo. No
+Render: **New +** → **Blueprint** → selecione este repositório. Ele cria o
+serviço a partir de `ai-service/Dockerfile`. Depois, em **Environment**, preencha
+os segredos `GOOGLE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
+
+**Opção B — manual:**
 1. New → Web Service → aponte para este repositório, **Root Directory** `ai-service`.
 2. Environment: **Docker** (usa o `Dockerfile`) ou **Python** com
    start `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-3. Configure as variáveis acima. Pegue a URL pública (ex.: `https://konoha-ai.onrender.com`).
+3. Configure as variáveis e pegue a URL pública (ex.: `https://konoha-ai.onrender.com`).
+
+> O serviço expõe `GET /health` para o health check do Render.
+
+> ⚠️ Os valores das chaves vão **somente** nas variáveis de ambiente do host —
+> nunca no repositório.
 
 ### Google Cloud Run
 ```bash
@@ -59,6 +71,11 @@ No `.env` do app (raiz do projeto Expo), aponte para a URL do serviço:
 ```
 EXPO_PUBLIC_AI_URL=https://sua-url-do-servico
 ```
+
+**Se o app web está na Vercel:** adicione a mesma variável
+`EXPO_PUBLIC_AI_URL` em **Project Settings → Environment Variables** e refaça o
+deploy (variáveis `EXPO_PUBLIC_*` são embutidas no build). A Vercel continua
+servindo só o **frontend**; o backend de IA fica neste serviço Python.
 
 O app (`src/app/(tabs)/ia.tsx` → `src/lib/aiClient.ts`) envia a pergunta com o
 token do usuário no header `Authorization`.
