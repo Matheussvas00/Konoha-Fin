@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, KeyboardAvoidingView, Platform, StatusBar, ActivityIndicator,
@@ -8,6 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 import { getAgentName, DEFAULT_AGENT_NAME } from '../../lib/agent';
 import { askAgent } from '../../lib/aiClient';
+import {
+  speechToTextAvailable, startDictation, textToSpeechAvailable, speak, stopSpeaking,
+  type DictationHandle,
+} from '../../lib/voiceWeb';
 
 // ── Sugestões rápidas ──────────────────────────────────────────────────
 
@@ -36,6 +40,36 @@ export default function IAScreen() {
   const [input, setInput]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [agentName, setAgentName] = useState(DEFAULT_AGENT_NAME);
+  const [listening, setListening] = useState(false);
+  const [voiceOut, setVoiceOut]   = useState(false);
+  const recRef = useRef<DictationHandle | null>(null);
+
+  const micOn = speechToTextAvailable();
+  const ttsOn = textToSpeechAvailable();
+
+  function toggleVoiceOut() {
+    setVoiceOut((v) => {
+      if (v) stopSpeaking();
+      return !v;
+    });
+  }
+
+  function toggleMic() {
+    if (listening) {
+      recRef.current?.stop();
+      recRef.current = null;
+      setListening(false);
+      return;
+    }
+    const handle = startDictation(
+      (text) => { setInput(text); send(text); },
+      () => { setListening(false); recRef.current = null; },
+    );
+    if (handle) {
+      recRef.current = handle;
+      setListening(true);
+    }
+  }
 
   // Recarrega o nome do agente sempre que a tela ganha foco (reflete o que foi
   // definido no Perfil).
@@ -57,11 +91,12 @@ export default function IAScreen() {
 
     try {
       const data = await askAgent(q, history, agentName);
-      const answer = (data?.answer ?? '').trim();
+      const answer = (data?.answer ?? '').trim() || 'Não consegui gerar uma resposta agora.';
       setMessages((prev) => [
         ...prev,
-        { role: 'ai', text: answer || 'Não consegui gerar uma resposta agora.', agent: data?.agent },
+        { role: 'ai', text: answer, agent: data?.agent },
       ]);
+      if (voiceOut) speak(answer);
     } catch (e: any) {
       setMessages((prev) => [
         ...prev,
@@ -86,10 +121,23 @@ export default function IAScreen() {
         <View style={s.headerIcon}>
           <Ionicons name="sparkles" size={18} color={colors.text} />
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{agentName}</Text>
           <Text style={s.headerSub}>Seu assistente financeiro · Gemini</Text>
         </View>
+        {ttsOn && (
+          <TouchableOpacity
+            onPress={toggleVoiceOut}
+            style={[s.voiceBtn, voiceOut && s.voiceBtnActive]}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={voiceOut ? 'volume-high' : 'volume-mute'}
+              size={18}
+              color={voiceOut ? colors.brandText : colors.textMuted}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView
@@ -173,12 +221,25 @@ export default function IAScreen() {
             style={s.input}
             value={input}
             onChangeText={setInput}
-            placeholder="Pergunte sobre suas finanças…"
+            placeholder={listening ? 'Ouvindo… fale agora' : 'Pergunte sobre suas finanças…'}
             placeholderTextColor={colors.placeholder}
             multiline
             returnKeyType="send"
             onSubmitEditing={() => send(input)}
           />
+          {micOn && (
+            <TouchableOpacity
+              style={[s.sendBtn, s.micBtn, listening && s.micBtnActive]}
+              onPress={toggleMic}
+              disabled={loading}
+            >
+              <Ionicons
+                name={listening ? 'stop' : 'mic'}
+                size={18}
+                color={listening ? colors.brandText : colors.text}
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[s.sendBtn, (!input.trim() || loading) && s.sendBtnDisabled]}
             onPress={() => send(input)}
@@ -290,4 +351,18 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   sendBtnDisabled: { backgroundColor: colors.border },
+
+  micBtn: {
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  micBtnActive: { backgroundColor: colors.expense, borderColor: colors.expense },
+
+  voiceBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  voiceBtnActive: { backgroundColor: colors.brand, borderColor: colors.brand },
 });
