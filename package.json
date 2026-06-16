@@ -1,6 +1,6 @@
 {
   "name": "konoha-fin",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~56.0.16",
