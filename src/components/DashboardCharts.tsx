@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { CategorySlice, MonthBar } from '../lib/analytics';
+import { Ionicons } from '@expo/vector-icons';
+import { CategorySlice, MonthBar, PaymentSlice } from '../lib/analytics';
 import { colors, spacing, radius, font, alpha } from '../lib/theme';
 
 function formatBRL(value: number) {
@@ -43,6 +44,42 @@ export function CategoryBreakdown({ data }: { data: CategorySlice[] }) {
               />
             </View>
             <Text style={s.catPct}>{c.pct.toFixed(0)}%</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ── Despesas por forma de pagamento (barras horizontais, monocromático) ─
+export function PaymentBreakdown({ data }: { data: PaymentSlice[] }) {
+  if (data.length === 0) return null;
+
+  const total = data.reduce((sum, p) => sum + p.total, 0);
+
+  return (
+    <View style={s.card}>
+      <View style={s.headerRow}>
+        <Text style={s.title}>Gastos por forma de pagamento</Text>
+        <Text style={s.totalTxt}>{formatBRL(total)}</Text>
+      </View>
+
+      <View style={{ gap: 12, marginTop: 4 }}>
+        {data.map((p) => (
+          <View key={p.key} style={s.catRow}>
+            <View style={s.catTop}>
+              <View style={s.catLabelWrap}>
+                <Ionicons name={p.icon as any} size={14} color={colors.textMuted} />
+                <Text style={s.catName} numberOfLines={1}>{p.label}</Text>
+              </View>
+              <Text style={s.catValue}>{formatBRL(p.total)}</Text>
+            </View>
+            <View style={s.track}>
+              <View
+                style={[s.fill, { width: `${Math.max(p.pct, 2)}%`, backgroundColor: colors.text }]}
+              />
+            </View>
+            <Text style={s.catPct}>{p.pct.toFixed(0)}%</Text>
           </View>
         ))}
       </View>

@@ -134,4 +134,37 @@ def build_summary(supabase) -> str:
                 for g in goals
             )
         )
+
+    # Gastos por forma de pagamento (a coluna pode não existir ainda → protegido)
+    try:
+        pay_rows = (
+            supabase.table("transactions")
+            .select("amount,payment_method")
+            .eq("status", "effected")
+            .eq("type", "expense")
+            .gte("date", start)
+            .lte("date", end)
+            .execute()
+            .data
+            or []
+        )
+        pay_labels = {
+            "pix": "Pix", "cash": "Dinheiro", "credit": "Crédito",
+            "debit": "Débito", "bank_transfer": "Transferência bancária",
+        }
+        pay: dict[str, float] = {}
+        for r in pay_rows:
+            k = r.get("payment_method") or "sem forma"
+            pay[k] = pay.get(k, 0) + float(r["amount"])
+        if pay:
+            lines.append(
+                "Gastos por forma de pagamento: "
+                + ", ".join(
+                    f"{pay_labels.get(k, k)}: {_brl(v)}"
+                    for k, v in sorted(pay.items(), key=lambda x: -x[1])
+                )
+            )
+    except Exception:
+        pass
+
     return "\n".join(lines)

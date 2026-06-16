@@ -15,6 +15,23 @@ export type MonthBar = {
   expense: number;
 };
 
+export type PaymentSlice = {
+  key:   string;
+  label: string;
+  icon:  string;
+  total: number;
+  pct:   number; // 0-100
+};
+
+const PAYMENT_META: Record<string, { label: string; icon: string }> = {
+  pix:           { label: 'Pix',                  icon: 'qr-code-outline' },
+  cash:          { label: 'Dinheiro',             icon: 'cash-outline' },
+  credit:        { label: 'Crédito',              icon: 'card-outline' },
+  debit:         { label: 'Débito',               icon: 'card' },
+  bank_transfer: { label: 'Transf. bancária',     icon: 'swap-horizontal-outline' },
+  none:          { label: 'Sem forma',            icon: 'help-circle-outline' },
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────
 const MONTH_LABELS = [
   'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
@@ -65,6 +82,46 @@ export async function getCategoryBreakdown(
         color: v.color,
         total: v.total,
         pct:   (v.total / total) * 100,
+      }))
+      .sort((a, b) => b.total - a.total);
+  } catch {
+    return [];
+  }
+}
+
+// ── Despesas por forma de pagamento (mês atual) ────────────────────────
+export async function getPaymentBreakdown(): Promise<PaymentSlice[]> {
+  const now = new Date();
+  const { start, end } = monthRange(now.getFullYear(), now.getMonth());
+
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('amount, payment_method')
+      .eq('status', 'effected')
+      .eq('type', 'expense')
+      .gte('date', start)
+      .lte('date', end);
+
+    // Coluna pode não existir ainda (migração 006 não rodada) → silencioso
+    if (error) return [];
+
+    const map = new Map<string, number>();
+    for (const t of (data ?? []) as any[]) {
+      const key = t.payment_method ?? 'none';
+      map.set(key, (map.get(key) ?? 0) + Number(t.amount));
+    }
+
+    const total = Array.from(map.values()).reduce((s, v) => s + v, 0);
+    if (total === 0) return [];
+
+    return Array.from(map.entries())
+      .map(([key, v]) => ({
+        key,
+        label: (PAYMENT_META[key] ?? PAYMENT_META.none).label,
+        icon:  (PAYMENT_META[key] ?? PAYMENT_META.none).icon,
+        total: v,
+        pct:   (v / total) * 100,
       }))
       .sort((a, b) => b.total - a.total);
   } catch {

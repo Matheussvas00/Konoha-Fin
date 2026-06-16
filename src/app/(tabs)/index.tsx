@@ -7,10 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getDashboardData, DashboardData } from '../../lib/dashboard';
 import {
-  getCategoryBreakdown, getMonthlyEvolution,
-  CategorySlice, MonthBar,
+  getCategoryBreakdown, getMonthlyEvolution, getPaymentBreakdown,
+  CategorySlice, MonthBar, PaymentSlice,
 } from '../../lib/analytics';
-import { CategoryBreakdown, MonthlyEvolution } from '../../components/DashboardCharts';
+import { CategoryBreakdown, MonthlyEvolution, PaymentBreakdown } from '../../components/DashboardCharts';
 import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_COLORS } from '../../lib/accounts';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
@@ -61,6 +61,7 @@ export default function InicioScreen() {
   const [data, setData]         = useState<DashboardData | null>(null);
   const [breakdown, setBreakdown] = useState<CategorySlice[]>([]);
   const [evolution, setEvolution] = useState<MonthBar[]>([]);
+  const [payments, setPayments]   = useState<PaymentSlice[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hideBalance, setHideBalance] = useState(false);
@@ -68,14 +69,16 @@ export default function InicioScreen() {
   async function load(isRefresh = false) {
     try {
       if (isRefresh) setRefreshing(true);
-      const [result, cats, evo] = await Promise.all([
+      const [result, cats, evo, pay] = await Promise.all([
         getDashboardData(),
         getCategoryBreakdown('expense'),
         getMonthlyEvolution(6),
+        getPaymentBreakdown(),
       ]);
       setData(result);
       setBreakdown(cats);
       setEvolution(evo);
+      setPayments(pay);
     } catch (e) {
       // Garante dados vazios para não crashar com data === null
       setData({
@@ -204,6 +207,7 @@ export default function InicioScreen() {
           <>
             <MonthlyEvolution data={evolution} />
             <CategoryBreakdown data={breakdown} />
+            <PaymentBreakdown data={payments} />
           </>
         )}
 
