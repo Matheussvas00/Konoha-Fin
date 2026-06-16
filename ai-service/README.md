@@ -1,3 +1,13 @@
+---
+title: Konoha Fin AI
+emoji: 🍃
+colorFrom: green
+colorTo: gray
+sdk: docker
+app_port: 8080
+pinned: false
+---
+
 # Konoha Fin · Serviço de IA multiagente (Python, leve)
 
 Backend do assistente financeiro: **FastAPI** + **Gemini** (chamadas REST
@@ -32,6 +42,22 @@ uvicorn main:app --reload --port 8080
 Teste: `curl -X POST localhost:8080/chat -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"question":"como foram meus gastos?","agentName":"Konoha"}'`
 
 (O `<token>` é o `access_token` de um usuário logado — dá pra pegar no app.)
+
+## Deploy no Hugging Face Spaces (grátis, mais generoso)
+
+1. Crie conta em https://huggingface.co e clique em **New Space**.
+2. **Space SDK: Docker** · nome à vontade · visibilidade **Public**.
+3. Em **Files**, suba os arquivos desta pasta `ai-service/`:
+   `Dockerfile`, `main.py`, `context.py`, `requirements.txt` e este `README.md`
+   (o bloco no topo deste README, com `sdk: docker` e `app_port: 8080`, é o que
+   configura o Space).
+4. Em **Settings → Variables and secrets**, adicione como **Secrets**:
+   `GOOGLE_API_KEY`, `SUPABASE_URL` (= `https://SEU-ID.supabase.co`) e
+   `SUPABASE_ANON_KEY`.
+5. O Space builda sozinho. A URL fica tipo
+   `https://SEU-USUARIO-konoha-fin-ai.hf.space`.
+6. No app, aponte `EXPO_PUBLIC_AI_URL` para essa URL (Vercel) e teste
+   `…/health`.
 
 ## Deploy
 
