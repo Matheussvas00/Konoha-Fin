@@ -1,8 +1,9 @@
-# Konoha Fin · Serviço de IA multiagente (Python + Google ADK)
+# Konoha Fin · Serviço de IA multiagente (Python, leve)
 
-Backend do assistente financeiro, construído com o **Google Agent Development
-Kit (ADK)** e **Gemini**. É um serviço **FastAPI** separado (a ADK é Python e não
-roda nas Edge Functions do Supabase).
+Backend do assistente financeiro: **FastAPI** + **Gemini** (chamadas REST
+diretas, sem bibliotecas pesadas), para rodar no **plano grátis** do Render
+(512 MB). Mantém o sistema multiagente: Roteador → Analista (leitura) ou
+Operador (escrita via function calling).
 
 ## Arquitetura
 

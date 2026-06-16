@@ -1,31 +1,6 @@
-"""Contexto por-requisição compartilhado entre os agentes ADK.
+"""Funções auxiliares puras: lookups e resumo financeiro (com RLS via cliente)."""
 
-Como as ferramentas da ADK são funções Python "soltas", usamos um ContextVar
-para que cada chamada tenha acesso ao cliente Supabase do usuário (com RLS),
-ao user_id e às listas de contas/categorias — sem variáveis globais mutáveis.
-"""
-
-import contextvars
 import datetime
-from dataclasses import dataclass, field
-from typing import Any
-
-
-@dataclass
-class RequestContext:
-    supabase: Any
-    user_id: str
-    agent_name: str
-    accounts: list
-    categories: list
-    actions: list = field(default_factory=list)
-
-
-request_ctx: contextvars.ContextVar["RequestContext"] = contextvars.ContextVar("request_ctx")
-
-
-def get_ctx() -> "RequestContext":
-    return request_ctx.get()
 
 
 def find_by_name(items: list, name: str | None):
@@ -51,12 +26,12 @@ def load_lookups(supabase) -> tuple[list, list]:
     return accounts, categories
 
 
-def _brl(n) -> str:
+def brl(n) -> str:
     return f"R$ {float(n):,.2f}"
 
 
 def build_summary(supabase) -> str:
-    """Monta um resumo financeiro do mês corrente (com RLS aplicada)."""
+    """Monta um resumo financeiro do mês corrente (RLS aplicada pelo cliente)."""
     today = datetime.date.today()
     start = today.replace(day=1).isoformat()
     nm = (
@@ -69,10 +44,7 @@ def build_summary(supabase) -> str:
     txs = (
         supabase.table("transactions")
         .select("type,amount,status,category_id")
-        .gte("date", start)
-        .lte("date", end)
-        .execute()
-        .data
+        .gte("date", start).lte("date", end).execute().data
         or []
     )
     accounts = (
@@ -86,11 +58,8 @@ def build_summary(supabase) -> str:
     catname = {c["id"]: c["name"] for c in cats}
     budgets = supabase.table("budgets").select("category_id,amount").execute().data or []
     goals = (
-        supabase.table("goals")
-        .select("name,target_amount,current_amount,is_completed")
-        .execute()
-        .data
-        or []
+        supabase.table("goals").select("name,target_amount,current_amount,is_completed")
+        .execute().data or []
     )
 
     eff = [t for t in txs if t["status"] == "effected"]
@@ -107,63 +76,38 @@ def build_summary(supabase) -> str:
     total = sum(balances.get(a["id"], 0) for a in accounts)
 
     lines = [
-        f"Saldo total: {_brl(total)}. Entradas: {_brl(income)}. "
-        f"Saídas: {_brl(expense)}. Resultado: {_brl(income - expense)}."
+        f"Saldo total: {brl(total)}. Entradas: {brl(income)}. "
+        f"Saídas: {brl(expense)}. Resultado: {brl(income - expense)}."
     ]
     if accounts:
-        lines.append(
-            "Carteiras: " + ", ".join(f"{a['name']} ({_brl(balances.get(a['id'], 0))})" for a in accounts)
-        )
+        lines.append("Carteiras: " + ", ".join(f"{a['name']} ({brl(balances.get(a['id'], 0))})" for a in accounts))
     if top:
-        lines.append("Gastos por categoria: " + ", ".join(f"{n}: {_brl(v)}" for n, v in top))
+        lines.append("Gastos por categoria: " + ", ".join(f"{n}: {brl(v)}" for n, v in top))
     if budgets:
-        lines.append(
-            "Orçamentos: "
-            + ", ".join(
-                f"{catname.get(b['category_id'], 'Categoria')}: "
-                f"gasto {_brl(bycat.get(catname.get(b['category_id']), 0))} de {_brl(b['amount'])}"
-                for b in budgets
-            )
-        )
+        lines.append("Orçamentos: " + ", ".join(
+            f"{catname.get(b['category_id'], 'Categoria')}: gasto {brl(bycat.get(catname.get(b['category_id']), 0))} de {brl(b['amount'])}"
+            for b in budgets))
     if goals:
-        lines.append(
-            "Metas: "
-            + ", ".join(
-                f"{g['name']}: {_brl(g['current_amount'])}/{_brl(g['target_amount'])}"
-                + (" (concluída)" if g.get("is_completed") else "")
-                for g in goals
-            )
-        )
+        lines.append("Metas: " + ", ".join(
+            f"{g['name']}: {brl(g['current_amount'])}/{brl(g['target_amount'])}"
+            + (" (concluída)" if g.get("is_completed") else "") for g in goals))
 
-    # Gastos por forma de pagamento (a coluna pode não existir ainda → protegido)
+    # Gastos por forma de pagamento (coluna pode não existir → protegido)
     try:
         pay_rows = (
-            supabase.table("transactions")
-            .select("amount,payment_method")
-            .eq("status", "effected")
-            .eq("type", "expense")
-            .gte("date", start)
-            .lte("date", end)
-            .execute()
-            .data
-            or []
+            supabase.table("transactions").select("amount,payment_method")
+            .eq("status", "effected").eq("type", "expense")
+            .gte("date", start).lte("date", end).execute().data or []
         )
-        pay_labels = {
-            "pix": "Pix", "cash": "Dinheiro", "credit": "Crédito",
-            "debit": "Débito", "bank_transfer": "Transferência bancária",
-        }
+        labels = {"pix": "Pix", "cash": "Dinheiro", "credit": "Crédito",
+                  "debit": "Débito", "bank_transfer": "Transferência bancária"}
         pay: dict[str, float] = {}
         for r in pay_rows:
             k = r.get("payment_method") or "sem forma"
             pay[k] = pay.get(k, 0) + float(r["amount"])
         if pay:
-            lines.append(
-                "Gastos por forma de pagamento: "
-                + ", ".join(
-                    f"{pay_labels.get(k, k)}: {_brl(v)}"
-                    for k, v in sorted(pay.items(), key=lambda x: -x[1])
-                )
-            )
+            lines.append("Gastos por forma de pagamento: " + ", ".join(
+                f"{labels.get(k, k)}: {brl(v)}" for k, v in sorted(pay.items(), key=lambda x: -x[1])))
     except Exception:
         pass
 
