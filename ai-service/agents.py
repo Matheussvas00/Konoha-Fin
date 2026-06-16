@@ -28,6 +28,9 @@ def obter_resumo_financeiro() -> dict:
 
 # ── Ferramentas do OPERADOR (escrita) ───────────────────────────────────
 
+_PAYMENT_METHODS = {"pix", "cash", "credit", "debit", "bank_transfer"}
+
+
 def criar_lancamento(
     tipo: str,
     descricao: str,
@@ -35,6 +38,7 @@ def criar_lancamento(
     conta: str,
     categoria: str = "",
     conta_destino: str = "",
+    forma_pagamento: str = "",
     data: str = "",
 ) -> dict:
     """Cria um lançamento financeiro.
@@ -43,6 +47,8 @@ def criar_lancamento(
     conta: nome da carteira de origem.
     categoria: nome da categoria (opcional).
     conta_destino: nome da carteira de destino (obrigatório só para 'transfer').
+    forma_pagamento: 'pix', 'cash' (dinheiro), 'credit' (crédito), 'debit'
+        (débito) ou 'bank_transfer' (transferência bancária) — opcional.
     data: 'YYYY-MM-DD' (opcional; padrão hoje).
     """
     ctx = get_ctx()
@@ -68,6 +74,8 @@ def criar_lancamento(
         "amount": float(valor),
         "date": data or datetime.date.today().isoformat(),
     }
+    if forma_pagamento in _PAYMENT_METHODS:
+        row["payment_method"] = forma_pagamento
     ctx.supabase.table("transactions").insert(row).execute()
     msg = f"Lançamento criado: {row['description']} ({_brl(valor)}) em {acc['name']}."
     ctx.actions.append({"tool": "criar_lancamento", "ok": True, "message": msg})

@@ -9,6 +9,10 @@ export type TransactionStatus = 'effected' | 'pending';
 export type RecurrencePattern =
   | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual';
 
+// Formas de pagamento suportadas.
+export type PaymentMethod =
+  | 'pix' | 'cash' | 'credit' | 'debit' | 'bank_transfer';
+
 export type Transaction = {
   id:          string;
   user_id:     string;
@@ -21,6 +25,7 @@ export type Transaction = {
   amount:      number;
   date:        string;            // YYYY-MM-DD
   notes:       string | null;
+  payment_method: PaymentMethod | null;
   // Recorrência (a "transação-modelo" guarda o padrão; as instâncias geradas
   // apontam para ela via recurring_parent).
   recurrence:       RecurrencePattern | null;
@@ -143,6 +148,7 @@ export type CreateTransactionInput = {
   amount:        number;
   date:          string;
   notes?:        string;
+  payment_method?: PaymentMethod;
   recurrence?:     RecurrencePattern;
   recurrence_end?: string;
 };
@@ -163,6 +169,10 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     date:          input.date,
     notes:         input.notes ?? null,
   };
+
+  // Só referencia a coluna quando há valor — assim, quem ainda não aplicou a
+  // migração 006 continua criando lançamentos sem forma de pagamento.
+  if (input.payment_method) row.payment_method = input.payment_method;
 
   // Só referencia as colunas de recorrência quando há recorrência — assim, quem
   // ainda não aplicou a migração 005 continua criando lançamentos normais.
@@ -255,6 +265,7 @@ export async function generateDueRecurring(): Promise<number> {
         amount:        t.amount,
         date:          next,
         notes:         t.notes,
+        payment_method: t.payment_method ?? null,
         recurring_parent: t.id,
       });
       next = addInterval(next, t.recurrence as RecurrencePattern);

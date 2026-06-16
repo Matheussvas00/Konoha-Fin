@@ -7,7 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
-  TransactionType, TransactionRow, RecurrencePattern,
+  TransactionType, TransactionRow, RecurrencePattern, PaymentMethod,
   listTransactions, createTransaction, updateTransaction,
   deleteTransaction, toggleStatus, currentMonth, CreateTransactionInput,
 } from '../../lib/transactions';
@@ -47,6 +47,22 @@ const TYPE_ICONS: Record<TransactionType, string> = {
   income:   'arrow-down-circle-outline',
   expense:  'arrow-up-circle-outline',
   transfer: 'swap-horizontal-outline',
+};
+
+const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
+  { key: 'pix',           label: 'Pix',            icon: 'qr-code-outline' },
+  { key: 'cash',          label: 'Dinheiro',       icon: 'cash-outline' },
+  { key: 'credit',        label: 'Crédito',        icon: 'card-outline' },
+  { key: 'debit',         label: 'Débito',         icon: 'card' },
+  { key: 'bank_transfer', label: 'Transf. banc.',  icon: 'swap-horizontal-outline' },
+];
+
+const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  pix: 'Pix',
+  cash: 'Dinheiro',
+  credit: 'Crédito',
+  debit: 'Débito',
+  bank_transfer: 'Transf. bancária',
 };
 
 const RECURRENCE_OPTS: { key: RecurrencePattern | 'none'; label: string }[] = [
@@ -159,6 +175,7 @@ export default function LancamentosScreen() {
   const [date, setDate]               = useState(todayISO());
   const [isPending, setIsPending]     = useState(false);
   const [notes, setNotes]             = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [recurrence, setRecurrence]   = useState<RecurrencePattern | 'none'>('none');
   const [recurrenceEnd, setRecurrenceEnd] = useState('');
   const [saving, setSaving]           = useState(false);
@@ -205,6 +222,7 @@ export default function LancamentosScreen() {
     setDate(todayISO());
     setIsPending(false);
     setNotes('');
+    setPaymentMethod('');
     setRecurrence('none');
     setRecurrenceEnd('');
     setModalVisible(true);
@@ -221,6 +239,7 @@ export default function LancamentosScreen() {
     setDate(tx.date);
     setIsPending(tx.status === 'pending');
     setNotes(tx.notes ?? '');
+    setPaymentMethod(tx.payment_method ?? '');
     setRecurrence(tx.recurrence ?? 'none');
     setRecurrenceEnd(tx.recurrence_end ?? '');
     setModalVisible(true);
@@ -250,6 +269,7 @@ export default function LancamentosScreen() {
         amount,
         date,
         notes: notes.trim() || undefined,
+        payment_method: paymentMethod || undefined,
         recurrence:     recurring ? (recurrence as RecurrencePattern) : undefined,
         recurrence_end: recurring && recurrenceEnd.trim() ? recurrenceEnd.trim() : undefined,
       };
@@ -515,6 +535,7 @@ export default function LancamentosScreen() {
                     {tx.type === 'transfer' && tx.to_account_name
                       ? ` → ${tx.to_account_name}` : ''}
                     {' · '}{fmtDate(tx.date)}
+                    {tx.payment_method ? ` · ${PAYMENT_LABELS[tx.payment_method]}` : ''}
                   </Text>
                 </View>
               </View>
@@ -638,6 +659,28 @@ export default function LancamentosScreen() {
                   </TouchableOpacity>
                 </>
               )}
+
+              {/* Forma de pagamento */}
+              <Text style={s.label}>Forma de pagamento</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.recRow} style={{ marginBottom: 16 }}>
+                {PAYMENT_METHODS.map((p) => (
+                  <TouchableOpacity
+                    key={p.key}
+                    style={[s.pmChip, paymentMethod === p.key && s.pmChipActive]}
+                    onPress={() => setPaymentMethod(paymentMethod === p.key ? '' : p.key)}
+                  >
+                    <Ionicons
+                      name={p.icon as any}
+                      size={14}
+                      color={paymentMethod === p.key ? colors.brandText : colors.textMuted}
+                    />
+                    <Text style={[s.pmChipTxt, paymentMethod === p.key && s.pmChipTxtActive]}>
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
               {/* Data */}
               <Text style={s.label}>Data (AAAA-MM-DD)</Text>
@@ -959,6 +1002,16 @@ const s = StyleSheet.create({
   recChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
   recChipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   recChipTxtActive: { color: colors.brandText },
+
+  pmChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1,
+    borderColor: colors.border, backgroundColor: colors.bg,
+  },
+  pmChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  pmChipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  pmChipTxtActive: { color: colors.brandText },
 
   recNote: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

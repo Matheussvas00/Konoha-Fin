@@ -15,6 +15,14 @@ const TYPE_LABEL: Record<string, string> = {
   transfer: 'Transferência',
 };
 
+const PAYMENT_LABEL: Record<string, string> = {
+  pix: 'Pix',
+  cash: 'Dinheiro',
+  credit: 'Crédito',
+  debit: 'Débito',
+  bank_transfer: 'Transferência bancária',
+};
+
 function cell(value: string | number | null | undefined): string {
   const s = value == null ? '' : String(value);
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -23,7 +31,7 @@ function cell(value: string | number | null | undefined): string {
 export function transactionsToCSV(rows: TransactionRow[]): string {
   const header = [
     'Data', 'Descrição', 'Categoria', 'Conta', 'Destino',
-    'Tipo', 'Valor', 'Status', 'Recorrência', 'Notas',
+    'Tipo', 'Forma de pagamento', 'Valor', 'Status', 'Recorrência', 'Notas',
   ];
 
   const lines = [header.join(';')];
@@ -36,6 +44,7 @@ export function transactionsToCSV(rows: TransactionRow[]): string {
       t.account_name ?? '',
       t.to_account_name ?? '',
       TYPE_LABEL[t.type] ?? t.type,
+      t.payment_method ? (PAYMENT_LABEL[t.payment_method] ?? t.payment_method) : '',
       t.amount.toFixed(2).replace('.', ','),
       t.status === 'pending' ? 'Pendente' : 'Efetivado',
       t.recurrence ?? '',
