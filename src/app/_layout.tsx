@@ -4,6 +4,28 @@ import { ActivityIndicator, View, Text, ScrollView } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { supabaseConfigError } from '../lib/supabase';
 
+// ── Diagnóstico (web): mostra erros não capturados como overlay na tela ──
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const show = (msg: string) => {
+    let el = document.getElementById('__err') as HTMLPreElement | null;
+    if (!el) {
+      el = document.createElement('pre');
+      el.id = '__err';
+      el.style.cssText =
+        'position:fixed;left:0;right:0;bottom:0;max-height:55%;overflow:auto;margin:0;' +
+        'padding:12px;background:#1a0000;color:#ff8a8a;font-size:12px;z-index:99999;white-space:pre-wrap';
+      document.body.appendChild(el);
+    }
+    el.textContent = (el.textContent || '') + msg + '\n\n';
+  };
+  window.addEventListener('error', (e: any) =>
+    show('ERROR: ' + (e?.error?.stack || e?.message || String(e))),
+  );
+  window.addEventListener('unhandledrejection', (e: any) =>
+    show('PROMISE: ' + (e?.reason?.stack || String(e?.reason))),
+  );
+}
+
 // Mostra qualquer erro de renderização na tela (em vez de tela branca).
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
