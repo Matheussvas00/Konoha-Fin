@@ -2,18 +2,40 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+// Limpa o valor da variável: remove espaços e aspas acidentais e garante o
+// prefixo https:// (causas comuns de "Invalid supabaseUrl" no deploy).
+function cleanEnv(raw: string | undefined): string {
+  return (raw ?? '').trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
 
-// Se faltar configuração, NÃO quebra no boot (evita tela branca) — o app mostra
-// uma mensagem clara via este sinalizador.
+function normalizeUrl(raw: string): string {
+  let u = cleanEnv(raw);
+  if (u && !/^https?:\/\//i.test(u)) u = `https://${u}`;
+  return u.replace(/\/+$/, '');
+}
+
+function isValidHttpUrl(u: string): boolean {
+  try {
+    const parsed = new URL(u);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+const supabaseUrl = normalizeUrl(process.env.EXPO_PUBLIC_SUPABASE_URL);
+const supabaseAnonKey = cleanEnv(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+
+// Sinaliza problema de configuração SEM quebrar o boot (evita tela branca).
 export const supabaseConfigError =
   !supabaseUrl || !supabaseAnonKey
-    ? 'Configuração ausente: defina EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY nas Environment Variables da Vercel (Production) e refaça o deploy SEM cache.'
-    : null;
+    ? 'Configuração ausente: defina EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY nas Environment Variables da Vercel (Production) e refaça o deploy.'
+    : !isValidHttpUrl(supabaseUrl)
+      ? `EXPO_PUBLIC_SUPABASE_URL inválida: "${supabaseUrl}". Use exatamente algo como https://SEU-PROJETO.supabase.co (sem aspas e sem espaços).`
+      : null;
 
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
+  isValidHttpUrl(supabaseUrl) ? supabaseUrl : 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-anon-key',
   {
     auth: {
