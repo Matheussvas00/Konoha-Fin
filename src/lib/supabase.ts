@@ -10,7 +10,12 @@ function cleanEnv(raw: string | undefined): string {
 
 function normalizeUrl(raw: string): string {
   let u = cleanEnv(raw);
-  if (u && !/^https?:\/\//i.test(u)) u = `https://${u}`;
+  if (!u) return '';
+  // Caso comum: colaram a URL do PAINEL (supabase.com/dashboard/project/<ref>)
+  // em vez da URL da API. Extrai o <ref> e monta a URL correta da API.
+  const dash = u.match(/supabase\.(?:com|co)\/dashboard\/project\/([a-z0-9]+)/i);
+  if (dash) return `https://${dash[1]}.supabase.co`;
+  if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
   return u.replace(/\/+$/, '');
 }
 
