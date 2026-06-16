@@ -65,6 +65,36 @@ expor números inventados.
 5. A resposta volta ao app com um **selo do agente** que respondeu
    (Analista/Operador) — ótimo para visualizar o sistema multiagente na demo.
 
+## 4.1. Diagrama de sequência (ex.: "Lance R$ 50 no mercado")
+
+```mermaid
+sequenceDiagram
+    participant U as Usuário (app)
+    participant API as FastAPI /chat
+    participant CO as Coordenador
+    participant OP as Operador
+    participant T as Ferramenta criar_lancamento
+    participant DB as Supabase (RLS)
+    participant G as Gemini
+
+    U->>API: POST /chat {pergunta, token}
+    API->>DB: get_user(token) + postgrest.auth(token)
+    API->>CO: Runner.run_async("Lance R$50 no mercado")
+    CO->>G: classifica a intenção
+    G-->>CO: transfer_to_agent("operador")
+    CO->>OP: delega
+    OP->>G: qual ferramenta usar?
+    G-->>OP: functionCall criar_lancamento{valor:50, conta:"Nubank"...}
+    OP->>T: executa
+    T->>DB: insert em transactions (user_id, RLS)
+    DB-->>T: ok
+    T-->>OP: {ok:true, "Lançamento criado..."}
+    OP->>G: gerar confirmação em linguagem natural
+    G-->>OP: "Pronto, lancei R$ 50 no mercado."
+    OP-->>API: resposta final (author = operador)
+    API-->>U: {answer, agent:"operador", actions:[...]}
+```
+
 ## 5. Tecnologias
 
 - **Google ADK (Agent Development Kit)** — framework de agentes em **Python**,
