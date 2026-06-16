@@ -156,6 +156,8 @@ export default function LancamentosScreen() {
   const [search, setSearch]                     = useState('');
   const [categoryFilterId, setCategoryFilterId] = useState('');
   const [showCatFilter, setShowCatFilter]       = useState(false);
+  const [paymentFilter, setPaymentFilter]       = useState<PaymentMethod | ''>('');
+  const [showPayFilter, setShowPayFilter]       = useState(false);
 
   // dados auxiliares
   const [accounts, setAccounts]     = useState<AccountWithBalance[]>([]);
@@ -359,6 +361,7 @@ export default function LancamentosScreen() {
   const filtered = transactions.filter((t) => {
     if (filterType !== 'all' && t.type !== filterType) return false;
     if (categoryFilterId && t.category_id !== categoryFilterId) return false;
+    if (paymentFilter && t.payment_method !== paymentFilter) return false;
     if (q) {
       const hay = `${t.description} ${t.category_name ?? ''} ${t.notes ?? ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -451,6 +454,16 @@ export default function LancamentosScreen() {
             color={categoryFilterId ? colors.brandText : colors.textMuted}
           />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.catFilterBtn, paymentFilter ? s.catFilterBtnActive : null]}
+          onPress={() => setShowPayFilter(true)}
+        >
+          <Ionicons
+            name="card"
+            size={16}
+            color={paymentFilter ? colors.brandText : colors.textMuted}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Filtros de tipo */}
@@ -473,6 +486,12 @@ export default function LancamentosScreen() {
             <Ionicons name="close" size={13} color={colors.textMuted} />
           </TouchableOpacity>
         ) : null}
+        {paymentFilter ? (
+          <TouchableOpacity style={[s.chip, s.chipCat]} onPress={() => setPaymentFilter('')}>
+            <Text style={s.chipCatTxt} numberOfLines={1}>{PAYMENT_LABELS[paymentFilter]}</Text>
+            <Ionicons name="close" size={13} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
 
       {/* Lista */}
@@ -490,7 +509,7 @@ export default function LancamentosScreen() {
             <Text style={s.emptyTxt}>
               {loading
                 ? 'Carregando…'
-                : (search || categoryFilterId || filterType !== 'all')
+                : (search || categoryFilterId || paymentFilter || filterType !== 'all')
                   ? 'Nenhum lançamento encontrado'
                   : 'Nenhum lançamento neste mês'}
             </Text>
@@ -827,6 +846,17 @@ export default function LancamentosScreen() {
         selected={categoryFilterId}
         onSelect={setCategoryFilterId}
         onClose={() => setShowCatFilter(false)}
+      />
+      <PickerModal
+        visible={showPayFilter}
+        title="Filtrar por forma de pagamento"
+        items={[
+          { id: '', name: 'Todas as formas', color: null },
+          ...PAYMENT_METHODS.map((p) => ({ id: p.key, name: p.label, color: null })),
+        ]}
+        selected={paymentFilter}
+        onSelect={(id) => setPaymentFilter(id as PaymentMethod | '')}
+        onClose={() => setShowPayFilter(false)}
       />
     </View>
   );
