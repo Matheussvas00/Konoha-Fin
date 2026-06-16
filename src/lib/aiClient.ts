@@ -30,7 +30,8 @@ export async function askAgent(
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
-  const res = await fetch(`${AI_URL.replace(/\/+$/, '')}/chat`, {
+  const target = `${AI_URL.replace(/\/+$/, '')}/chat`;
+  const res = await fetch(target, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -41,7 +42,7 @@ export async function askAgent(
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Serviço de IA respondeu ${res.status}. ${body.slice(0, 200)}`);
+    throw new Error(`Serviço de IA respondeu ${res.status} em ${target}. ${body.slice(0, 160)}`);
   }
   return res.json();
 }
