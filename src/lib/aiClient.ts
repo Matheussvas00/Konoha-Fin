@@ -40,7 +40,8 @@ export async function askAgent(
   });
 
   if (!res.ok) {
-    throw new Error(`Serviço de IA respondeu ${res.status}`);
+    const body = await res.text().catch(() => '');
+    throw new Error(`Serviço de IA respondeu ${res.status}. ${body.slice(0, 200)}`);
   }
   return res.json();
 }

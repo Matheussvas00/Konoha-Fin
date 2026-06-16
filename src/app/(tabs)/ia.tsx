@@ -62,12 +62,12 @@ export default function IAScreen() {
         ...prev,
         { role: 'ai', text: answer || 'Não consegui gerar uma resposta agora.', agent: data?.agent },
       ]);
-    } catch {
+    } catch (e: any) {
       setMessages((prev) => [
         ...prev,
         {
           role: 'ai',
-          text: 'Não consegui falar com o assistente agora. Verifique sua conexão e tente novamente em instantes.',
+          text: `Não consegui falar com o assistente.\n\nDetalhe: ${String(e?.message ?? e)}`,
         },
       ]);
     } finally {
