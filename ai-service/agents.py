@@ -135,6 +135,40 @@ def criar_meta(nome: str, valor_alvo: float, valor_inicial: float = 0) -> dict:
     return {"ok": True, "message": msg}
 
 
+def definir_orcamento(categoria: str, valor: float) -> dict:
+    """Define (cria ou atualiza) o orçamento mensal de uma categoria de despesa."""
+    ctx = get_ctx()
+    cat = find_by_name(ctx.categories, categoria)
+    if not cat:
+        nomes = ", ".join(c["name"] for c in ctx.categories) or "nenhuma"
+        return {"ok": False, "message": f"Categoria '{categoria}' não encontrada. Disponíveis: {nomes}."}
+    ctx.supabase.table("budgets").upsert(
+        {"user_id": ctx.user_id, "category_id": cat["id"], "amount": float(valor)},
+        on_conflict="user_id,category_id",
+    ).execute()
+    msg = f"Orçamento de {cat['name']} definido em {_brl(valor)}/mês."
+    ctx.actions.append({"tool": "definir_orcamento", "ok": True, "message": msg})
+    return {"ok": True, "message": msg}
+
+
+def aportar_meta(meta: str, valor: float) -> dict:
+    """Aporta (ou retira, com valor negativo) um valor em uma meta de economia."""
+    ctx = get_ctx()
+    goals = ctx.supabase.table("goals").select("id,name,target_amount,current_amount").execute().data or []
+    g = find_by_name(goals, meta)
+    if not g:
+        nomes = ", ".join(x["name"] for x in goals) or "nenhuma"
+        return {"ok": False, "message": f"Meta '{meta}' não encontrada. Disponíveis: {nomes}."}
+    nxt = max(0.0, float(g["current_amount"]) + float(valor))
+    ctx.supabase.table("goals").update({
+        "current_amount": nxt,
+        "is_completed": nxt >= float(g["target_amount"]),
+    }).eq("id", g["id"]).execute()
+    msg = f"Aporte de {_brl(valor)} na meta '{g['name']}'. Total: {_brl(nxt)}."
+    ctx.actions.append({"tool": "aportar_meta", "ok": True, "message": msg})
+    return {"ok": True, "message": msg}
+
+
 def _brl(n) -> str:
     return f"R$ {float(n):,.2f}"
 
@@ -162,11 +196,15 @@ def build_root_agent() -> Agent:
         description="Registra lançamentos, categorias, carteiras e metas a pedido do usuário.",
         instruction=(
             "Você é {agent_name}, o agente OPERADOR do app Konoha Fin. "
-            "Use as ferramentas para REGISTRAR o que o usuário pedir (lançamento, categoria, "
-            "carteira ou meta). Se faltar uma informação obrigatória, pergunte de forma objetiva "
-            "em vez de chamar a ferramenta. Depois de registrar, confirme em uma frase curta."
+            "Use as ferramentas para REGISTRAR o que o usuário pedir: lançamento, categoria, "
+            "carteira, meta, orçamento de categoria e aporte em meta. Se faltar uma informação "
+            "obrigatória, pergunte de forma objetiva em vez de chamar a ferramenta. Depois de "
+            "registrar, confirme em uma frase curta."
         ),
-        tools=[criar_lancamento, criar_categoria, criar_carteira, criar_meta],
+        tools=[
+            criar_lancamento, criar_categoria, criar_carteira, criar_meta,
+            definir_orcamento, aportar_meta,
+        ],
     )
 
     coordenador = Agent(

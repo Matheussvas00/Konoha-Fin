@@ -24,6 +24,14 @@ export type BudgetProgress = {
 
 const FALLBACK_COLOR = '#64748b';
 
+async function currentUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  const id = data.user?.id;
+  if (!id) throw new Error('Sessão expirada. Entre novamente.');
+  return id;
+}
+
 function currentMonthRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -91,10 +99,11 @@ export async function getBudgetedCategoryIds(): Promise<string[]> {
 // ── Mutações ───────────────────────────────────────────────────────────
 /** Cria ou atualiza o orçamento de uma categoria (upsert pelo par único). */
 export async function upsertBudget(categoryId: string, amount: number): Promise<Budget> {
+  const user_id = await currentUserId();
   const { data, error } = await supabase
     .from('budgets')
     .upsert(
-      { category_id: categoryId, amount },
+      { user_id, category_id: categoryId, amount },
       { onConflict: 'user_id,category_id' }
     )
     .select()

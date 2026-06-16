@@ -26,6 +26,14 @@ export const GOAL_ICONS = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────
+async function currentUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  const id = data.user?.id;
+  if (!id) throw new Error('Sessão expirada. Entre novamente.');
+  return id;
+}
+
 export function goalProgress(g: Goal): number {
   if (g.target_amount <= 0) return 0;
   return Math.min((g.current_amount / g.target_amount) * 100, 100);
@@ -63,9 +71,11 @@ export type CreateGoalInput = {
 
 export async function createGoal(input: CreateGoalInput): Promise<Goal> {
   const current = input.current_amount ?? 0;
+  const user_id = await currentUserId();
   const { data, error } = await supabase
     .from('goals')
     .insert({
+      user_id,
       name:           input.name,
       target_amount:  input.target_amount,
       current_amount: current,
