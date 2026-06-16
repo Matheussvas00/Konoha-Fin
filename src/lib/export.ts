@@ -1,6 +1,4 @@
 import { Platform } from 'react-native';
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { TransactionRow, todayISO } from './transactions';
 
 // ── Geração de CSV ─────────────────────────────────────────────────────
@@ -61,8 +59,8 @@ export type ExportResult = { shared: boolean; uri?: string };
 
 /**
  * Exporta os lançamentos para CSV. No web faz download direto; no nativo grava
- * em cache e abre o share sheet (expo-sharing). Retorna `shared: false` quando
- * o compartilhamento não está disponível (arquivo gravado, mas não aberto).
+ * em cache e abre o share sheet (expo-sharing). Os módulos nativos são
+ * importados sob demanda (import dinâmico) para nunca serem avaliados no web.
  */
 export async function exportTransactionsCSV(
   rows: TransactionRow[],
@@ -85,7 +83,11 @@ export async function exportTransactionsCSV(
     return { shared: true };
   }
 
-  const file = new File(Paths.cache, filename);
+  // Nativo: carrega expo-file-system / expo-sharing só aqui.
+  const FileSystem = await import('expo-file-system');
+  const Sharing = await import('expo-sharing');
+
+  const file = new FileSystem.File(FileSystem.Paths.cache, filename);
   try {
     if (file.exists) file.delete();
   } catch {
