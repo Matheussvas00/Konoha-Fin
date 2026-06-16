@@ -17,7 +17,10 @@ function normalizeUrl(raw: string): string {
 function isValidHttpUrl(u: string): boolean {
   try {
     const parsed = new URL(u);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.hostname.includes('.')
+    );
   } catch {
     return false;
   }
