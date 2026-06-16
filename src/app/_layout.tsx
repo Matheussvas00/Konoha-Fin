@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router';
 import { ActivityIndicator, View, Text, ScrollView } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { supabaseConfigError } from '../lib/supabase';
 
@@ -94,8 +95,10 @@ export default function RootLayout() {
     return <ConfigError message={supabaseConfigError} />;
   }
   return (
-    <AuthProvider>
-      <RootNavigation />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigation />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

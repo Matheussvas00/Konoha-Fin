@@ -15,12 +15,16 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     }
     el.textContent = (el.textContent || '') + m + '\n\n';
   };
-  window.addEventListener('error', (e) =>
-    show('ERROR: ' + ((e.error && e.error.stack) || e.message || String(e))),
-  );
-  window.addEventListener('unhandledrejection', (e) =>
-    show('PROMISE: ' + ((e.reason && (e.reason.stack || e.reason.message)) || String(e.reason))),
-  );
+  window.addEventListener('error', (e) => {
+    const msg = e.message || (e.error && e.error.message) || 'erro desconhecido';
+    const where = e.filename ? ` @ ${e.filename}:${e.lineno}:${e.colno}` : '';
+    const stack = (e.error && e.error.stack) || '';
+    show('ERROR: ' + msg + where + '\n' + stack);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason || {};
+    show('PROMISE: ' + (r.message || String(r)) + '\n' + (r.stack || ''));
+  });
 }
 
 require('expo-router/entry');
