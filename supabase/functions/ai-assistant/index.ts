@@ -1,103 +1,70 @@
-// Supabase Edge Function — Assistente financeiro MULTIAGENTE com Google Gemini.
+// Supabase Edge Function — Assistente financeiro MULTIAGENTE (Groq, grátis).
 //
-// Arquitetura (sistema multiagente):
-//   1) ROTEADOR  — classifica a mensagem do usuário em "analise" ou "acao".
-//   2) ANALISTA  — agente somente-leitura: relatórios, análises e insights a
-//                  partir de um resumo financeiro do mês.
-//   3) OPERADOR  — agente com ferramentas (function calling) que GRAVA dados:
-//                  lançamentos, categorias, carteiras, orçamentos e metas.
+//   ROTEADOR  -> classifica a mensagem em "analise" ou "acao".
+//   ANALISTA  -> somente leitura: relatórios/análises do mês.
+//   OPERADOR  -> escreve dados via function calling (lançamento, categoria,
+//                carteira, meta, orçamento, aporte).
 //
-// Deploy:
-//   supabase functions deploy ai-assistant
-//   supabase secrets set GEMINI_API_KEY=sua_chave
-//
-// O JWT do usuário (header Authorization) garante RLS em todas as operações.
+// Deploy:  supabase functions deploy ai-assistant
+// Secret:  supabase secrets set GROQ_API_KEY=gsk_...   (pegue em console.groq.com)
+//          (SUPABASE_URL e SUPABASE_ANON_KEY são injetados automaticamente)
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
-const GEMINI_URL = (key: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+const GROQ_MODEL = Deno.env.get('GROQ_MODEL') ?? 'llama-3.3-70b-versatile';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const PAYMENT = new Set(['pix', 'cash', 'credit', 'debit', 'bank_transfer']);
 
 function corsHeaders(req: Request) {
-  const origin = req.headers.get('origin') ?? '*';
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': req.headers.get('origin') ?? '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Vary': 'Origin',
   };
 }
-
 const json = (body: unknown, status = 200, req?: Request) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: {
-      ...(req ? corsHeaders(req) : {}),
-      'Content-Type': 'application/json',
-    },
+    headers: { ...(req ? corsHeaders(req) : {}), 'Content-Type': 'application/json' },
   });
 
-function brl(n: number): string {
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+const brl = (n: number) => Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function monthRange(): { start: string; end: string; label: string } {
+function monthRange() {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  return {
-    start: new Date(y, m, 1).toISOString().slice(0, 10),
-    end: new Date(y, m + 1, 0).toISOString().slice(0, 10),
-    label: now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-  };
+  const y = now.getFullYear(), m = now.getMonth();
+  return { start: new Date(y, m, 1).toISOString().slice(0, 10), end: new Date(y, m + 1, 0).toISOString().slice(0, 10) };
 }
 
-// ── Chamada genérica ao Gemini ──────────────────────────────────────────
+function findByName(items: any[], name?: string) {
+  if (!name) return null;
+  const q = String(name).trim().toLowerCase();
+  return items.find((x) => x.name.toLowerCase() === q) ?? items.find((x) => x.name.toLowerCase().includes(q)) ?? null;
+}
 
-type GeminiPart = { text?: string; functionCall?: { name: string; args: any }; functionResponse?: any };
-type GeminiContent = { role: 'user' | 'model' | 'function'; parts: GeminiPart[] };
+// ── Chamada ao Groq (OpenAI-compatible) ─────────────────────────────────
 
-async function callGemini(
-  key: string,
-  systemText: string,
-  contents: GeminiContent[],
-  tools?: any[],
-): Promise<GeminiPart[]> {
-  const body: any = {
-    system_instruction: { parts: [{ text: systemText }] },
-    contents,
-    generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
-  };
-  if (tools) {
-    body.tools = tools;
-    body.tool_config = { function_calling_config: { mode: 'AUTO' } };
-  }
-
-  const res = await fetch(GEMINI_URL(key), {
+async function groqChat(key: string, messages: any[], tools?: any[]) {
+  const body: any = { model: GROQ_MODEL, messages, temperature: 0.3, max_tokens: 1024 };
+  if (tools) { body.tools = tools; body.tool_choice = 'auto'; }
+  const res = await fetch(GROQ_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return data?.candidates?.[0]?.content?.parts ?? [];
+  return data?.choices?.[0]?.message ?? { content: '' };
 }
 
-function partsText(parts: GeminiPart[]): string {
-  return parts.filter((p) => p.text).map((p) => p.text).join('').trim();
-}
-
-// ── Coleta de contexto financeiro ───────────────────────────────────────
+// ── Contexto financeiro ─────────────────────────────────────────────────
 
 async function buildContext(supabase: SupabaseClient) {
-  const { start, end, label } = monthRange();
+  const { start, end } = monthRange();
   const [txRes, accRes, balRes, budRes, goalRes, catRes] = await Promise.all([
-    supabase.from('transactions').select('type, amount, status, category_id').gte('date', start).lte('date', end),
+    supabase.from('transactions').select('type, amount, status, category_id, payment_method').gte('date', start).lte('date', end),
     supabase.from('accounts').select('id, name, type').eq('is_archived', false),
     supabase.from('account_balances').select('id, balance'),
     supabase.from('budgets').select('category_id, amount'),
@@ -123,235 +90,171 @@ async function buildContext(supabase: SupabaseClient) {
     const n = catName.get(t.category_id) ?? 'Sem categoria';
     byCat.set(n, (byCat.get(n) ?? 0) + Number(t.amount));
   }
-  const topCats = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const totalBalance = accounts.reduce((s: number, a: any) => s + (balances.get(a.id) ?? 0), 0);
+  const top = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const total = accounts.reduce((s: number, a: any) => s + (balances.get(a.id) ?? 0), 0);
 
-  const summary: string[] = [];
-  summary.push(`Mês de referência: ${label}.`);
-  summary.push(`Saldo total: ${brl(totalBalance)}. Entradas: ${brl(income)}. Saídas: ${brl(expense)}. Resultado: ${brl(income - expense)}.`);
-  if (accounts.length) summary.push('Carteiras: ' + accounts.map((a: any) => `${a.name} (${brl(balances.get(a.id) ?? 0)})`).join(', ') + '.');
-  if (topCats.length) summary.push('Gastos por categoria: ' + topCats.map(([n, v]) => `${n}: ${brl(v)}`).join(', ') + '.');
-  if (budgets.length) summary.push('Orçamentos: ' + budgets.map((b: any) => `${catName.get(b.category_id) ?? 'Categoria'}: gasto ${brl(byCat.get(catName.get(b.category_id)) ?? 0)} de ${brl(Number(b.amount))}`).join(', ') + '.');
-  if (goals.length) summary.push('Metas: ' + goals.map((g: any) => `${g.name}: ${brl(Number(g.current_amount))}/${brl(Number(g.target_amount))}${g.is_completed ? ' (concluída)' : ''}`).join(', ') + '.');
+  const payLabels: Record<string, string> = { pix: 'Pix', cash: 'Dinheiro', credit: 'Crédito', debit: 'Débito', bank_transfer: 'Transferência bancária' };
+  const byPay = new Map<string, number>();
+  for (const t of eff) {
+    if (t.type !== 'expense') continue;
+    const k = t.payment_method ?? 'sem forma';
+    byPay.set(k, (byPay.get(k) ?? 0) + Number(t.amount));
+  }
 
-  return {
-    summaryText: summary.join('\n'),
-    accounts: accounts as any[],
-    categories: cats as any[],
-  };
+  const lines: string[] = [
+    `Saldo total: ${brl(total)}. Entradas: ${brl(income)}. Saídas: ${brl(expense)}. Resultado: ${brl(income - expense)}.`,
+  ];
+  if (accounts.length) lines.push('Carteiras: ' + accounts.map((a: any) => `${a.name} (${brl(balances.get(a.id) ?? 0)})`).join(', '));
+  if (top.length) lines.push('Gastos por categoria: ' + top.map(([n, v]) => `${n}: ${brl(v)}`).join(', '));
+  if (budgets.length) lines.push('Orçamentos: ' + budgets.map((b: any) => `${catName.get(b.category_id) ?? 'Categoria'}: gasto ${brl(byCat.get(catName.get(b.category_id)) ?? 0)} de ${brl(Number(b.amount))}`).join(', '));
+  if (goals.length) lines.push('Metas: ' + goals.map((g: any) => `${g.name}: ${brl(Number(g.current_amount))}/${brl(Number(g.target_amount))}${g.is_completed ? ' (concluída)' : ''}`).join(', '));
+  if (byPay.size) lines.push('Gastos por forma de pagamento: ' + [...byPay.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${payLabels[k] ?? k}: ${brl(v)}`).join(', '));
+
+  return { summaryText: lines.join('\n'), accounts, categories: cats };
 }
 
-// ── Agente 1: ROTEADOR ──────────────────────────────────────────────────
+// ── Ferramentas do Operador (formato OpenAI) ────────────────────────────
 
-async function routeIntent(key: string, question: string): Promise<'analise' | 'acao'> {
-  const sys =
-    'Você é um roteador de um sistema financeiro multiagente. Classifique a mensagem do usuário em UMA palavra: ' +
-    '"acao" se ele quer CRIAR/REGISTRAR/SALVAR algo (lançamento, despesa, receita, transferência, categoria, carteira, orçamento, meta); ' +
-    '"analise" se ele quer relatório, análise, consulta, dica ou conversa. Responda SOMENTE com "acao" ou "analise".';
-  const parts = await callGemini(key, sys, [{ role: 'user', parts: [{ text: question }] }]);
-  const label = partsText(parts).toLowerCase();
-  return label.includes('acao') || label.includes('ação') ? 'acao' : 'analise';
-}
+const fn = (name: string, description: string, properties: any, required: string[]) =>
+  ({ type: 'function', function: { name, description, parameters: { type: 'object', properties, required } } });
 
-// ── Agente 2: ANALISTA (somente leitura) ────────────────────────────────
+const TOOLS = [
+  fn('criar_lancamento', 'Cria um lançamento (income/expense/transfer).', {
+    tipo: { type: 'string', enum: ['income', 'expense', 'transfer'] },
+    descricao: { type: 'string' }, valor: { type: 'number' },
+    conta: { type: 'string', description: 'nome da carteira de origem' },
+    categoria: { type: 'string' },
+    conta_destino: { type: 'string', description: 'só para transfer' },
+    forma_pagamento: { type: 'string', enum: ['pix', 'cash', 'credit', 'debit', 'bank_transfer'] },
+    data: { type: 'string', description: 'YYYY-MM-DD; padrão hoje' },
+  }, ['tipo', 'descricao', 'valor', 'conta']),
+  fn('criar_categoria', 'Cria uma categoria.', {
+    nome: { type: 'string' }, tipo: { type: 'string', enum: ['income', 'expense'] },
+  }, ['nome', 'tipo']),
+  fn('criar_carteira', 'Cria uma carteira/conta.', {
+    nome: { type: 'string' },
+    tipo: { type: 'string', enum: ['checking', 'savings', 'cash', 'credit_card', 'investment', 'other'] },
+    saldo_inicial: { type: 'number' },
+  }, ['nome', 'tipo']),
+  fn('criar_meta', 'Cria uma meta de economia.', {
+    nome: { type: 'string' }, valor_alvo: { type: 'number' }, valor_inicial: { type: 'number' },
+  }, ['nome', 'valor_alvo']),
+  fn('definir_orcamento', 'Define/atualiza o orçamento mensal de uma categoria.', {
+    categoria: { type: 'string' }, valor: { type: 'number' },
+  }, ['categoria', 'valor']),
+  fn('aportar_meta', 'Aporta (ou retira, negativo) valor em uma meta.', {
+    meta: { type: 'string' }, valor: { type: 'number' },
+  }, ['meta', 'valor']),
+];
 
-async function runAnalyst(
-  key: string, persona: string, summaryText: string,
-  history: GeminiContent[], question: string,
-): Promise<string> {
-  const sys =
-    `Você é ${persona}, o agente ANALISTA do app Konoha Fin. Responda em português do Brasil, ` +
-    `de forma curta, clara e prática. Baseie-se SOMENTE nos dados abaixo; se não houver o dado, diga que não tem essa informação. ` +
-    `Não invente números. Dê dicas acionáveis quando fizer sentido.\n\nDADOS:\n${summaryText}`;
-  const parts = await callGemini(key, sys, [...history, { role: 'user', parts: [{ text: question }] }]);
-  return partsText(parts) || 'Não consegui gerar uma análise agora.';
-}
-
-// ── Agente 3: OPERADOR (com ferramentas de escrita) ─────────────────────
-
-const operatorTools = [{
-  function_declarations: [
-    {
-      name: 'criar_lancamento',
-      description: 'Cria um lançamento (receita, despesa ou transferência).',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          tipo: { type: 'STRING', enum: ['income', 'expense', 'transfer'] },
-          descricao: { type: 'STRING' },
-          valor: { type: 'NUMBER', description: 'valor positivo em reais' },
-          conta: { type: 'STRING', description: 'nome da carteira de origem' },
-          categoria: { type: 'STRING', description: 'nome da categoria (opcional)' },
-          conta_destino: { type: 'STRING', description: 'apenas para transferência' },
-          data: { type: 'STRING', description: 'YYYY-MM-DD; se omitido, hoje' },
-        },
-        required: ['tipo', 'descricao', 'valor', 'conta'],
-      },
-    },
-    {
-      name: 'criar_categoria',
-      description: 'Cria uma nova categoria.',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          nome: { type: 'STRING' },
-          tipo: { type: 'STRING', enum: ['income', 'expense'] },
-        },
-        required: ['nome', 'tipo'],
-      },
-    },
-    {
-      name: 'criar_carteira',
-      description: 'Cria uma nova carteira/conta.',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          nome: { type: 'STRING' },
-          tipo: { type: 'STRING', enum: ['checking', 'savings', 'cash', 'credit_card', 'investment', 'other'] },
-          saldo_inicial: { type: 'NUMBER' },
-        },
-        required: ['nome', 'tipo'],
-      },
-    },
-    {
-      name: 'criar_meta',
-      description: 'Cria uma meta de economia.',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          nome: { type: 'STRING' },
-          valor_alvo: { type: 'NUMBER' },
-          valor_inicial: { type: 'NUMBER' },
-        },
-        required: ['nome', 'valor_alvo'],
-      },
-    },
-  ],
-}];
-
-function findByName<T extends { name: string }>(list: T[], name?: string): T | undefined {
-  if (!name) return undefined;
-  const q = name.trim().toLowerCase();
-  return list.find((x) => x.name.toLowerCase() === q) ?? list.find((x) => x.name.toLowerCase().includes(q));
-}
-
-async function execTool(
-  name: string, args: any, supabase: SupabaseClient, userId: string,
-  accounts: any[], categories: any[],
-): Promise<{ ok: boolean; message: string }> {
+async function execTool(name: string, args: any, supabase: SupabaseClient, userId: string, accounts: any[], categories: any[]) {
   try {
     if (name === 'criar_lancamento') {
       const acc = findByName(accounts, args.conta);
       if (!acc) return { ok: false, message: `Carteira "${args.conta}" não encontrada. Disponíveis: ${accounts.map((a) => a.name).join(', ') || 'nenhuma'}.` };
-      const cat = findByName(categories, args.categoria);
-      const toAcc = args.tipo === 'transfer' ? findByName(accounts, args.conta_destino) : undefined;
-      if (args.tipo === 'transfer' && !toAcc) return { ok: false, message: 'Transferência precisa de uma conta de destino válida.' };
       const valor = Number(args.valor);
       if (!valor || valor <= 0) return { ok: false, message: 'Valor inválido.' };
-
-      const { error } = await supabase.from('transactions').insert({
-        user_id: userId,
-        account_id: acc.id,
-        to_account_id: toAcc?.id ?? null,
-        category_id: cat?.id ?? null,
-        type: args.tipo,
-        status: 'effected',
-        description: String(args.descricao ?? '').trim() || 'Lançamento',
-        amount: valor,
+      const cat = findByName(categories, args.categoria);
+      const toAcc = args.tipo === 'transfer' ? findByName(accounts, args.conta_destino) : null;
+      if (args.tipo === 'transfer' && !toAcc) return { ok: false, message: 'Transferência precisa de conta de destino válida.' };
+      const row: any = {
+        user_id: userId, account_id: acc.id, to_account_id: toAcc?.id ?? null,
+        category_id: cat?.id ?? null, type: args.tipo, status: 'effected',
+        description: String(args.descricao ?? 'Lançamento').trim(), amount: valor,
         date: args.data || todayISO(),
-      });
+      };
+      if (PAYMENT.has(args.forma_pagamento)) row.payment_method = args.forma_pagamento;
+      const { error } = await supabase.from('transactions').insert(row);
       if (error) throw error;
-      return { ok: true, message: `Lançamento criado: ${args.descricao} (${brl(valor)}) em ${acc.name}.` };
+      return { ok: true, message: `Lançamento criado: ${row.description} (${brl(valor)}) em ${acc.name}.` };
     }
-
     if (name === 'criar_categoria') {
-      const { data, error } = await supabase.from('categories').insert({
-        user_id: userId, name: String(args.nome).trim(), type: args.tipo,
-        icon: 'ellipsis-horizontal-outline',
-      }).select().single();
+      const { data, error } = await supabase.from('categories').insert({ user_id: userId, name: String(args.nome).trim(), type: args.tipo, icon: 'ellipsis-horizontal-outline' }).select().single();
       if (error) throw error;
       categories.push(data);
-      return { ok: true, message: `Categoria "${args.nome}" (${args.tipo === 'income' ? 'receita' : 'despesa'}) criada.` };
+      return { ok: true, message: `Categoria "${args.nome}" criada.` };
     }
-
     if (name === 'criar_carteira') {
-      const { data, error } = await supabase.from('accounts').insert({
-        user_id: userId, name: String(args.nome).trim(), type: args.tipo,
-        initial_balance: Number(args.saldo_inicial ?? 0), currency: 'BRL',
-      }).select().single();
+      const { data, error } = await supabase.from('accounts').insert({ user_id: userId, name: String(args.nome).trim(), type: args.tipo, initial_balance: Number(args.saldo_inicial ?? 0), currency: 'BRL' }).select().single();
       if (error) throw error;
       accounts.push(data);
-      return { ok: true, message: `Carteira "${args.nome}" criada com saldo ${brl(Number(args.saldo_inicial ?? 0))}.` };
+      return { ok: true, message: `Carteira "${args.nome}" criada.` };
     }
-
     if (name === 'criar_meta') {
-      const { error } = await supabase.from('goals').insert({
-        user_id: userId, name: String(args.nome).trim(),
-        target_amount: Number(args.valor_alvo), current_amount: Number(args.valor_inicial ?? 0),
-      });
+      const { error } = await supabase.from('goals').insert({ user_id: userId, name: String(args.nome).trim(), target_amount: Number(args.valor_alvo), current_amount: Number(args.valor_inicial ?? 0) });
       if (error) throw error;
       return { ok: true, message: `Meta "${args.nome}" criada (alvo ${brl(Number(args.valor_alvo))}).` };
     }
-
+    if (name === 'definir_orcamento') {
+      const cat = findByName(categories, args.categoria);
+      if (!cat) return { ok: false, message: `Categoria "${args.categoria}" não encontrada.` };
+      const { error } = await supabase.from('budgets').upsert({ user_id: userId, category_id: cat.id, amount: Number(args.valor) }, { onConflict: 'user_id,category_id' });
+      if (error) throw error;
+      return { ok: true, message: `Orçamento de ${cat.name} definido em ${brl(Number(args.valor))}/mês.` };
+    }
+    if (name === 'aportar_meta') {
+      const { data: goals } = await supabase.from('goals').select('id, name, target_amount, current_amount');
+      const g = findByName(goals ?? [], args.meta);
+      if (!g) return { ok: false, message: `Meta "${args.meta}" não encontrada.` };
+      const nxt = Math.max(0, Number(g.current_amount) + Number(args.valor));
+      const { error } = await supabase.from('goals').update({ current_amount: nxt, is_completed: nxt >= Number(g.target_amount) }).eq('id', g.id);
+      if (error) throw error;
+      return { ok: true, message: `Aporte de ${brl(Number(args.valor))} na meta "${g.name}". Total: ${brl(nxt)}.` };
+    }
     return { ok: false, message: `Ferramenta desconhecida: ${name}.` };
   } catch (e) {
-    return { ok: false, message: `Erro ao executar ${name}: ${String((e as any)?.message ?? e)}` };
+    return { ok: false, message: `Erro em ${name}: ${String((e as any)?.message ?? e)}` };
   }
 }
 
-async function runOperator(
-  key: string, persona: string, supabase: SupabaseClient, userId: string,
-  accounts: any[], categories: any[], question: string,
-): Promise<{ answer: string; actions: { tool: string; ok: boolean; message: string }[] }> {
-  const sys =
-    `Você é ${persona}, o agente OPERADOR do app Konoha Fin. Sua função é REGISTRAR dados a pedido do usuário ` +
-    `usando as ferramentas disponíveis. Em português do Brasil. ` +
-    `Carteiras existentes: ${accounts.map((a) => a.name).join(', ') || 'nenhuma'}. ` +
-    `Categorias existentes: ${categories.map((c) => c.name).join(', ') || 'nenhuma'}. ` +
-    `Se faltar uma informação obrigatória, pergunte de forma objetiva em vez de chamar a ferramenta. ` +
-    `Após registrar, confirme em uma frase curta o que foi feito.`;
+// ── Agentes ─────────────────────────────────────────────────────────────
 
-  const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: question }] }];
-  const actions: { tool: string; ok: boolean; message: string }[] = [];
+async function routeIntent(key: string, question: string): Promise<'analise' | 'acao'> {
+  const m = await groqChat(key, [
+    { role: 'system', content: 'Classifique a mensagem em UMA palavra: "acao" se o usuário quer criar/registrar/salvar algo (lançamento, despesa, receita, transferência, categoria, carteira, orçamento, meta, aporte); "analise" caso contrário. Responda só "acao" ou "analise".' },
+    { role: 'user', content: question },
+  ]);
+  const t = String(m.content ?? '').toLowerCase();
+  return (t.includes('acao') || t.includes('ação')) ? 'acao' : 'analise';
+}
 
-  for (let step = 0; step < 5; step++) {
-    const parts = await callGemini(key, sys, contents, operatorTools);
-    const calls = parts.filter((p) => p.functionCall);
+async function runAnalyst(key: string, persona: string, summary: string, history: any[], question: string) {
+  const sys = `Você é ${persona}, o agente ANALISTA do app Konoha Fin. Responda em português do Brasil, curto e prático. Baseie-se SOMENTE nos dados abaixo; se não houver, diga que não tem essa informação. Nunca invente valores.\n\nDADOS:\n${summary}`;
+  const m = await groqChat(key, [{ role: 'system', content: sys }, ...history, { role: 'user', content: question }]);
+  return String(m.content ?? '').trim() || 'Não consegui analisar agora.';
+}
 
-    if (calls.length === 0) {
-      return { answer: partsText(parts) || 'Pronto.', actions };
+async function runOperator(key: string, persona: string, supabase: SupabaseClient, userId: string, accounts: any[], categories: any[], question: string) {
+  const sys = `Você é ${persona}, o agente OPERADOR do app Konoha Fin. Use as ferramentas para registrar o que o usuário pedir. Se faltar dado obrigatório, pergunte. Carteiras: ${accounts.map((a) => a.name).join(', ') || 'nenhuma'}. Categorias: ${categories.map((c) => c.name).join(', ') || 'nenhuma'}. Ao terminar, confirme em uma frase curta.`;
+  const messages: any[] = [{ role: 'system', content: sys }, { role: 'user', content: question }];
+  const actions: any[] = [];
+
+  for (let i = 0; i < 4; i++) {
+    const m = await groqChat(key, messages, TOOLS);
+    if (m.tool_calls && m.tool_calls.length) {
+      messages.push({ role: 'assistant', content: m.content ?? '', tool_calls: m.tool_calls });
+      for (const tc of m.tool_calls) {
+        let args: any = {};
+        try { args = JSON.parse(tc.function.arguments || '{}'); } catch { /* ignore */ }
+        const r = await execTool(tc.function.name, args, supabase, userId, accounts, categories);
+        actions.push({ tool: tc.function.name, ok: r.ok, message: r.message });
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: r.message });
+      }
+      continue;
     }
-
-    // registra a vez do modelo (com as chamadas) e executa cada ferramenta
-    contents.push({ role: 'model', parts });
-    const responseParts: GeminiPart[] = [];
-    for (const c of calls) {
-      const fc = c.functionCall!;
-      const result = await execTool(fc.name, fc.args ?? {}, supabase, userId, accounts, categories);
-      actions.push({ tool: fc.name, ok: result.ok, message: result.message });
-      responseParts.push({ functionResponse: { name: fc.name, response: { result: result.message, ok: result.ok } } });
-    }
-    contents.push({ role: 'function', parts: responseParts });
+    const text = String(m.content ?? '').trim();
+    return { answer: text || (actions.length ? actions[actions.length - 1].message : 'Pronto.'), actions };
   }
-
-  // fallback: pede um fechamento textual
-  const closing = await callGemini(key, sys, contents);
-  return { answer: partsText(closing) || actions.map((a) => a.message).join('\n') || 'Concluído.', actions };
+  return { answer: actions.length ? actions[actions.length - 1].message : 'Concluído.', actions };
 }
 
 // ── Orquestração ────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(req),
-    });
-  }
-
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) });
   try {
-    const key = Deno.env.get('GEMINI_API_KEY');
-    if (!key) return json({ error: 'GEMINI_API_KEY não configurada.' }, 500, req);
+    const key = Deno.env.get('GROQ_API_KEY');
+    if (!key) return json({ error: 'GROQ_API_KEY não configurada.' }, 500, req);
 
     const { question, history, agentName } = await req.json().catch(() => ({}));
     if (!question || typeof question !== 'string') return json({ error: 'Pergunta ausente.' }, 400, req);
@@ -361,32 +264,25 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
     );
-
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData.user) return json({ error: 'Não autenticado.' }, 401, req);
-    const userId = userData.user.id;
+    const { data: u, error: uErr } = await supabase.auth.getUser();
+    if (uErr || !u.user) return json({ error: 'Não autenticado.' }, 401, req);
 
     const persona = (agentName && String(agentName).trim()) || 'Konoha';
-
-    const histContents: GeminiContent[] = (Array.isArray(history) ? history : [])
+    const hist = (Array.isArray(history) ? history : [])
       .filter((m: any) => m && typeof m.text === 'string')
       .slice(-10)
-      .map((m: any) => ({ role: m.role === 'ai' ? 'model' : 'user', parts: [{ text: String(m.text) }] }));
+      .map((m: any) => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: String(m.text) }));
 
-    // Agente 1 — Roteador
-    const intent = await routeIntent(key, question);
-
-    if (intent === 'acao') {
+    if (await routeIntent(key, question) === 'acao') {
       const { accounts, categories } = await buildContext(supabase);
-      const { answer, actions } = await runOperator(key, persona, supabase, userId, accounts, categories, question);
-      return json({ answer, agent: 'operador', actions });
+      const { answer, actions } = await runOperator(key, persona, supabase, u.user.id, accounts, categories, question);
+      return json({ answer, agent: 'operador', actions }, 200, req);
     }
 
-    // Agente 2 — Analista
     const { summaryText } = await buildContext(supabase);
-    const answer = await runAnalyst(key, persona, summaryText, histContents, question);
-    return json({ answer, agent: 'analista', actions: [] });
+    const answer = await runAnalyst(key, persona, summaryText, hist, question);
+    return json({ answer, agent: 'analista', actions: [] }, 200, req);
   } catch (e) {
-    return json({ error: String((e as any)?.message ?? e) }, 500, req);
+    return json({ error: `LLM: ${String((e as any)?.message ?? e)}` }, 502, req);
   }
 });
