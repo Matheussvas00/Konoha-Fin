@@ -6,6 +6,32 @@ const AI_URL = process.env.EXPO_PUBLIC_AI_URL?.trim() ?? '';
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, '');
 const FALLBACK_AI_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ai-assistant` : '';
 
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function buildCandidateTargets(): string[] {
+  const targets = new Set<string>();
+  const base = AI_URL ? normalizeBaseUrl(AI_URL) : '';
+
+  if (base) {
+    if (base.endsWith('/chat')) {
+      targets.add(base);
+    } else {
+      targets.add(`${base}/chat`);
+      targets.add(`${base}/api/chat`);
+      targets.add(`${base}/api`);
+      targets.add(base);
+    }
+  }
+
+  if (FALLBACK_AI_URL) {
+    targets.add(FALLBACK_AI_URL);
+  }
+
+  return [...targets];
+}
+
 export type AgentId = 'analista' | 'operador' | 'roteador';
 
 export type AgentReply = {
@@ -43,10 +69,7 @@ export async function askAgent(
 ): Promise<AgentReply> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  const targets = [
-    AI_URL ? `${AI_URL.replace(/\/+$/, '')}/chat` : null,
-    FALLBACK_AI_URL,
-  ].filter(Boolean) as string[];
+  const targets = buildCandidateTargets();
 
   if (!targets.length) {
     throw new Error('Nenhuma configuração de IA encontrada. Defina EXPO_PUBLIC_AI_URL ou EXPO_PUBLIC_SUPABASE_URL.');
@@ -59,6 +82,7 @@ export async function askAgent(
     try {
       const res = await fetch(target, {
         method: 'POST',
+        mode: 'cors',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
