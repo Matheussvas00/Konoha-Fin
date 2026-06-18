@@ -49,3 +49,5 @@ ai-service/
 # Artefatos da apresentação (banner)
 banner.png
 make_banner.py
+banner_konoha.pptx
+make_banner_pptx.py
