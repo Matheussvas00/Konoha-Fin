@@ -45,3 +45,7 @@ example
 
 # Serviço de IA (vive no Hugging Face Space)
 ai-service/
+
+# Artefatos da apresentação (banner)
+banner.png
+make_banner.py
