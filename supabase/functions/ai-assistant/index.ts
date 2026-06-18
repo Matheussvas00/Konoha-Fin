@@ -19,14 +19,24 @@ const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_URL = (key: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+function corsHeaders(req: Request) {
+  const origin = req.headers.get('origin') ?? '*';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+const json = (body: unknown, status = 200, req?: Request) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...(req ? corsHeaders(req) : {}),
+      'Content-Type': 'application/json',
+    },
+  });
 
 function brl(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -332,14 +342,19 @@ async function runOperator(
 // ── Orquestração ────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(req),
+    });
+  }
 
   try {
     const key = Deno.env.get('GEMINI_API_KEY');
-    if (!key) return json({ error: 'GEMINI_API_KEY não configurada.' }, 500);
+    if (!key) return json({ error: 'GEMINI_API_KEY não configurada.' }, 500, req);
 
     const { question, history, agentName } = await req.json().catch(() => ({}));
-    if (!question || typeof question !== 'string') return json({ error: 'Pergunta ausente.' }, 400);
+    if (!question || typeof question !== 'string') return json({ error: 'Pergunta ausente.' }, 400, req);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -348,7 +363,7 @@ Deno.serve(async (req) => {
     );
 
     const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData.user) return json({ error: 'Não autenticado.' }, 401);
+    if (userErr || !userData.user) return json({ error: 'Não autenticado.' }, 401, req);
     const userId = userData.user.id;
 
     const persona = (agentName && String(agentName).trim()) || 'Konoha';
@@ -372,6 +387,6 @@ Deno.serve(async (req) => {
     const answer = await runAnalyst(key, persona, summaryText, histContents, question);
     return json({ answer, agent: 'analista', actions: [] });
   } catch (e) {
-    return json({ error: String((e as any)?.message ?? e) }, 500);
+    return json({ error: String((e as any)?.message ?? e) }, 500, req);
   }
 });
