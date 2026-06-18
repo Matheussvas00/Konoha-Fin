@@ -64,7 +64,7 @@ async function groqChat(key: string, messages: any[], tools?: any[]) {
 async function buildContext(supabase: SupabaseClient) {
   const { start, end } = monthRange();
   const [txRes, accRes, balRes, budRes, goalRes, catRes] = await Promise.all([
-    supabase.from('transactions').select('type, amount, status, category_id, payment_method').gte('date', start).lte('date', end),
+    supabase.from('transactions').select('type, amount, status, category_id').gte('date', start).lte('date', end),
     supabase.from('accounts').select('id, name, type').eq('is_archived', false),
     supabase.from('account_balances').select('id, balance'),
     supabase.from('budgets').select('category_id, amount'),
@@ -95,10 +95,20 @@ async function buildContext(supabase: SupabaseClient) {
 
   const payLabels: Record<string, string> = { pix: 'Pix', cash: 'Dinheiro', credit: 'Crédito', debit: 'Débito', bank_transfer: 'Transferência bancária' };
   const byPay = new Map<string, number>();
-  for (const t of eff) {
-    if (t.type !== 'expense') continue;
-    const k = t.payment_method ?? 'sem forma';
-    byPay.set(k, (byPay.get(k) ?? 0) + Number(t.amount));
+  try {
+    const { data: payRows } = await supabase
+      .from('transactions')
+      .select('amount, payment_method')
+      .eq('status', 'effected')
+      .eq('type', 'expense')
+      .gte('date', start)
+      .lte('date', end);
+    for (const t of (payRows ?? [])) {
+      const k = (t as any).payment_method ?? 'sem forma';
+      byPay.set(k, (byPay.get(k) ?? 0) + Number((t as any).amount));
+    }
+  } catch {
+    // coluna payment_method (migração 006) pode ainda não existir — ignora
   }
 
   const lines: string[] = [
@@ -164,7 +174,12 @@ async function execTool(name: string, args: any, supabase: SupabaseClient, userI
         date: args.data || todayISO(),
       };
       if (PAYMENT.has(args.forma_pagamento)) row.payment_method = args.forma_pagamento;
-      const { error } = await supabase.from('transactions').insert(row);
+      let { error } = await supabase.from('transactions').insert(row);
+      if (error && row.payment_method) {
+        // coluna payment_method (migração 006) pode não existir — tenta sem ela
+        delete row.payment_method;
+        ({ error } = await supabase.from('transactions').insert(row));
+      }
       if (error) throw error;
       return { ok: true, message: `Lançamento criado: ${row.description} (${brl(valor)}) em ${acc.name}.` };
     }
