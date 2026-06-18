@@ -42,3 +42,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Serviço de IA (vive no Hugging Face Space)
+ai-service/
