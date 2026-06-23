@@ -110,7 +110,7 @@ begin
     ('expense', 'Educação',      'Livros',                    120.00, 19, 'cash',          'Dinheiro')
   ) as v(type, cat, descr, amount, day, pay, wallet)
   join public.categories c
-    on c.user_id = uid and c.name = v.cat and c.type = v.type
+    on c.user_id = uid and c.name = v.cat and c.type::text = v.type
   join public.accounts a
     on a.user_id = uid and a.name = v.wallet;
 
