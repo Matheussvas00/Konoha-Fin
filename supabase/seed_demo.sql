@@ -77,7 +77,7 @@ begin
   --     pix/débito/transferência → Conta Corrente; rendimento → Poupança)
   insert into public.transactions
     (user_id, account_id, category_id, type, status, description, amount, date, payment_method)
-  select uid, a.id, c.id, v.type, 'effected', v.descr, v.amount,
+  select uid, a.id, c.id, v.type::transaction_type, 'effected', v.descr, v.amount,
          (date_trunc('month', current_date)::date + (v.day - 1)), v.pay
   from (values
     -- tipo,     categoria,       descrição,                  valor,   dia, forma,           carteira
