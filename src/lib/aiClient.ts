@@ -16,7 +16,8 @@ export async function askAgent(
   agentName: string,
 ): Promise<AgentReply> {
   try {
-    const { data, error } = await supabase.functions.invoke<AgentReply>('ai-assistant', {
+    // Slug da Edge Function publicada no Supabase (nome gerado no deploy).
+    const { data, error } = await supabase.functions.invoke<AgentReply>('hyper-handler', {
       body: {
         question,
         history,
