@@ -1,0 +1,8 @@
+project_id = "konoha-fin"
+
+# A função do assistente é chamada pelo app no navegador. O preflight de CORS
+# (OPTIONS) vai SEM token, então o "Verify JWT" da plataforma precisa ficar
+# desligado — a própria função autentica o usuário internamente com
+# supabase.auth.getUser() (devolve "Não autenticado" se faltar o token).
+[functions.ai-assistant]
+verify_jwt = false
