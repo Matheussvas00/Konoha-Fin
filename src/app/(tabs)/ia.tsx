@@ -45,29 +45,58 @@ function ChatChart({ chart }: { chart: ChartSpec }) {
   if (!pts.length) return null;
   const max = Math.max(1, ...pts.map((p) => Math.abs(p.value)));
   const total = pts.reduce((acc, p) => acc + Math.abs(p.value), 0) || 1;
+  const n = pts.length;
+  // Tons de branco decrescentes (monocromático) para diferenciar os itens.
+  const shade = (i: number) => alpha(colors.text, Math.max(0.4, 0.95 - (n > 1 ? i / (n - 1) : 0) * 0.55));
 
   return (
     <View style={s.chartCard}>
       <View style={s.chartHead}>
-        <Ionicons name="bar-chart-outline" size={14} color={colors.text} />
-        <Text style={s.chartTitle}>{chart.title}</Text>
+        <Ionicons name={chart.type === 'pie' ? 'pie-chart' : 'bar-chart'} size={14} color={colors.text} />
+        <Text style={s.chartTitle} numberOfLines={1}>{chart.title}</Text>
+        <Text style={s.chartTotal}>{formatBRL(total)}</Text>
       </View>
-      <View style={{ gap: 10, marginTop: 4 }}>
-        {pts.map((p, i) => (
-          <View key={i} style={{ gap: 4 }}>
-            <View style={s.chartRowTop}>
-              <Text style={s.chartLabel} numberOfLines={1}>{p.label}</Text>
-              <Text style={s.chartValue}>{formatBRL(p.value)}</Text>
-            </View>
-            <View style={s.chartTrack}>
-              <View style={[s.chartFill, { width: `${Math.max((Math.abs(p.value) / max) * 100, 2)}%` }]} />
-            </View>
-            {chart.type === 'pie' && (
-              <Text style={s.chartPct}>{((Math.abs(p.value) / total) * 100).toFixed(0)}%</Text>
-            )}
+
+      {chart.type === 'pie' ? (
+        <>
+          <View style={s.stack}>
+            {pts.map((p, i) => (
+              <View
+                key={i}
+                style={{
+                  flex: Math.max(Math.abs(p.value), 0.0001),
+                  backgroundColor: shade(i),
+                  marginRight: i < n - 1 ? 2 : 0,
+                }}
+              />
+            ))}
           </View>
-        ))}
-      </View>
+          <View style={{ gap: 9, marginTop: 14 }}>
+            {pts.map((p, i) => (
+              <View key={i} style={s.legendRow}>
+                <View style={[s.legendDot, { backgroundColor: shade(i) }]} />
+                <Text style={s.legendLabel} numberOfLines={1}>{p.label}</Text>
+                <Text style={s.legendVal}>{formatBRL(p.value)}</Text>
+                <Text style={s.legendPct}>{((Math.abs(p.value) / total) * 100).toFixed(0)}%</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : (
+        <View style={{ gap: 13, marginTop: 8 }}>
+          {pts.map((p, i) => (
+            <View key={i} style={{ gap: 6 }}>
+              <View style={s.chartRowTop}>
+                <Text style={s.chartLabel} numberOfLines={1}>{p.label}</Text>
+                <Text style={s.chartValue}>{formatBRL(p.value)}</Text>
+              </View>
+              <View style={s.chartTrack}>
+                <View style={[s.chartFill, { width: `${Math.max((Math.abs(p.value) / max) * 100, 3)}%`, backgroundColor: shade(i) }]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -452,21 +481,35 @@ const s = StyleSheet.create({
   chartCard: {
     marginTop: 10,
     backgroundColor: colors.bg,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1, borderColor: colors.border,
-    padding: 12,
+    padding: 14,
   },
-  chartHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  chartHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   chartTitle: { color: colors.text, fontSize: 13, fontWeight: '700', flex: 1 },
+  chartTotal: { color: colors.text, fontSize: 13, fontWeight: '800' },
+
+  // barras
   chartRowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   chartLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600', flex: 1, paddingRight: 8 },
   chartValue: { color: colors.text, fontSize: 12, fontWeight: '700' },
   chartTrack: {
-    height: 7, borderRadius: 4,
+    height: 11, borderRadius: 6,
     backgroundColor: colors.surfaceAlt, overflow: 'hidden',
   },
-  chartFill: { height: '100%', borderRadius: 4, backgroundColor: colors.text },
-  chartPct: { color: colors.textFaint, fontSize: 10, fontWeight: '600', alignSelf: 'flex-end' },
+  chartFill: { height: '100%', borderRadius: 6, backgroundColor: colors.text },
+
+  // pizza (barra de proporção empilhada + legenda)
+  stack: {
+    flexDirection: 'row', height: 20, borderRadius: 10,
+    overflow: 'hidden', marginTop: 8,
+    backgroundColor: colors.surfaceAlt,
+  },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  legendDot: { width: 11, height: 11, borderRadius: 4 },
+  legendLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600', flex: 1 },
+  legendVal: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  legendPct: { color: colors.textFaint, fontSize: 11, fontWeight: '700', width: 38, textAlign: 'right' },
 
   thinkingTxt: { color: colors.textFaint, fontSize: 12, fontStyle: 'italic' },
 });
