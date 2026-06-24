@@ -257,8 +257,8 @@ export default function IAScreen() {
                           : msg.agent === 'grafico' ? 'bar-chart-outline'
                           : 'analytics-outline'
                         }
-                        size={10}
-                        color={colors.textFaint}
+                        size={11}
+                        color={colors.text}
                       />
                       <Text style={s.agentBadgeTxt}>Agente {AGENT_LABELS[msg.agent]}</Text>
                     </View>
@@ -277,7 +277,10 @@ export default function IAScreen() {
               <View style={s.aiAvatar}>
                 <Ionicons name="sparkles" size={12} color={colors.text} />
               </View>
-              <ActivityIndicator size="small" color={colors.text} style={{ marginLeft: 4 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator size="small" color={colors.text} />
+                <Text style={s.thinkingTxt}>Roteador escolhendo o agente…</Text>
+              </View>
             </View>
           )}
         </ScrollView>
@@ -401,11 +404,15 @@ const s = StyleSheet.create({
   bubbleTxt:     { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
   bubbleTxtUser: { color: colors.brandText },
   agentBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: alpha(colors.text, 0.12),
+    borderWidth: 1, borderColor: colors.border,
+    borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3,
   },
   agentBadgeTxt: {
-    color: colors.textFaint, fontSize: 10, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.4,
+    color: colors.text, fontSize: 10, fontWeight: '800',
+    textTransform: 'uppercase', letterSpacing: 0.5,
   },
 
   inputRow: {
@@ -460,4 +467,6 @@ const s = StyleSheet.create({
   },
   chartFill: { height: '100%', borderRadius: 4, backgroundColor: colors.text },
   chartPct: { color: colors.textFaint, fontSize: 10, fontWeight: '600', alignSelf: 'flex-end' },
+
+  thinkingTxt: { color: colors.textFaint, fontSize: 12, fontStyle: 'italic' },
 });
