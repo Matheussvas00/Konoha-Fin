@@ -1,0 +1,35 @@
+name: Deploy Edge Function
+
+# Publica a Edge Function `hyper-handler` automaticamente no Supabase.
+# - Roda quando algo em supabase/functions muda (push na main).
+# - Também pode ser disparado manualmente (aba Actions -> Run workflow).
+#
+# Pré-requisito: cadastrar 2 secrets no GitHub
+#   (Settings -> Secrets and variables -> Actions -> New repository secret):
+#     SUPABASE_ACCESS_TOKEN  -> https://supabase.com/dashboard/account/tokens
+#     SUPABASE_PROJECT_REF   -> Supabase: Settings -> General -> Reference ID
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/deploy-edge-function.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy hyper-handler
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: supabase functions deploy hyper-handler --project-ref "$SUPABASE_PROJECT_REF"
