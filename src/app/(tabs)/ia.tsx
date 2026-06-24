@@ -7,31 +7,70 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 import { getAgentName, DEFAULT_AGENT_NAME } from '../../lib/agent';
-import { askAgent } from '../../lib/aiClient';
+import { askAgent, transcribeAudio, type ChartSpec } from '../../lib/aiClient';
 import {
-  speechToTextAvailable, startDictation, textToSpeechAvailable, speak, stopSpeaking,
-  type DictationHandle,
+  audioRecordingAvailable, startAudioRecording, textToSpeechAvailable, speak, stopSpeaking,
+  type AudioRecorder,
 } from '../../lib/voiceWeb';
 
 // ── Sugestões rápidas ──────────────────────────────────────────────────
 
 const SUGGESTIONS = [
   'Como foram meus gastos este mês?',
-  'Em que categoria gasto mais?',
+  'Mostre um gráfico dos meus gastos por categoria.',
   'Lance uma despesa de R$ 50 no mercado pela carteira Nubank.',
   'Analise minha saúde financeira.',
 ];
 
 // ── Tipos ──────────────────────────────────────────────────────────────
 
-type AgentId = 'analista' | 'operador' | 'roteador';
-type Message = { role: 'user' | 'ai'; text: string; agent?: AgentId };
+type AgentId = 'analista' | 'operador' | 'roteador' | 'grafico';
+type Message = { role: 'user' | 'ai'; text: string; agent?: AgentId; chart?: ChartSpec };
 
 const AGENT_LABELS: Record<AgentId, string> = {
   analista: 'Analista',
   operador: 'Operador',
   roteador: 'Roteador',
+  grafico: 'Gráficos',
 };
+
+function formatBRL(value: number) {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// ── Gráfico no chat (barras horizontais, sem libs) ─────────────────────
+
+function ChatChart({ chart }: { chart: ChartSpec }) {
+  const pts = chart.points.filter((p) => Number.isFinite(p.value) && p.value !== 0);
+  if (!pts.length) return null;
+  const max = Math.max(1, ...pts.map((p) => Math.abs(p.value)));
+  const total = pts.reduce((acc, p) => acc + Math.abs(p.value), 0) || 1;
+
+  return (
+    <View style={s.chartCard}>
+      <View style={s.chartHead}>
+        <Ionicons name="bar-chart-outline" size={14} color={colors.text} />
+        <Text style={s.chartTitle}>{chart.title}</Text>
+      </View>
+      <View style={{ gap: 10, marginTop: 4 }}>
+        {pts.map((p, i) => (
+          <View key={i} style={{ gap: 4 }}>
+            <View style={s.chartRowTop}>
+              <Text style={s.chartLabel} numberOfLines={1}>{p.label}</Text>
+              <Text style={s.chartValue}>{formatBRL(p.value)}</Text>
+            </View>
+            <View style={s.chartTrack}>
+              <View style={[s.chartFill, { width: `${Math.max((Math.abs(p.value) / max) * 100, 2)}%` }]} />
+            </View>
+            {chart.type === 'pie' && (
+              <Text style={s.chartPct}>{((Math.abs(p.value) / total) * 100).toFixed(0)}%</Text>
+            )}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 // ── Screen ─────────────────────────────────────────────────────────────
 
@@ -40,11 +79,12 @@ export default function IAScreen() {
   const [input, setInput]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [agentName, setAgentName] = useState(DEFAULT_AGENT_NAME);
-  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [voiceOut, setVoiceOut]   = useState(false);
-  const recRef = useRef<DictationHandle | null>(null);
+  const recRef = useRef<AudioRecorder | null>(null);
 
-  const micOn = speechToTextAvailable();
+  const micOn = audioRecordingAvailable();
   const ttsOn = textToSpeechAvailable();
 
   function toggleVoiceOut() {
@@ -54,21 +94,43 @@ export default function IAScreen() {
     });
   }
 
-  function toggleMic() {
-    if (listening) {
-      recRef.current?.stop();
+  function pushAI(text: string) {
+    setMessages((prev) => [...prev, { role: 'ai', text }]);
+  }
+
+  async function toggleMic() {
+    if (transcribing) return;
+
+    // Parar a gravação → transcrever → enviar.
+    if (recording) {
+      setRecording(false);
+      const rec = recRef.current;
       recRef.current = null;
-      setListening(false);
+      if (!rec) return;
+      setTranscribing(true);
+      try {
+        const out = await rec.stop();
+        if (out?.base64) {
+          const text = await transcribeAudio(out.base64, out.mime);
+          if (text) send(text);
+          else pushAI('Não entendi o áudio. Tente falar de novo, mais perto do microfone.');
+        }
+      } catch (e: any) {
+        pushAI(`Não consegui transcrever o áudio.\n\nDetalhe: ${String(e?.message ?? e)}`);
+      } finally {
+        setTranscribing(false);
+      }
       return;
     }
-    const handle = startDictation(
-      (text) => { setInput(text); send(text); },
-      () => { setListening(false); recRef.current = null; },
-    );
-    if (handle) {
-      recRef.current = handle;
-      setListening(true);
+
+    // Iniciar a gravação.
+    const rec = await startAudioRecording();
+    if (!rec) {
+      pushAI('Não consegui acessar o microfone. Verifique a permissão do navegador para este site.');
+      return;
     }
+    recRef.current = rec;
+    setRecording(true);
   }
 
   // Recarrega o nome do agente sempre que a tela ganha foco (reflete o que foi
@@ -94,7 +156,7 @@ export default function IAScreen() {
       const answer = (data?.answer ?? '').trim() || 'Não consegui gerar uma resposta agora.';
       setMessages((prev) => [
         ...prev,
-        { role: 'ai', text: answer, agent: data?.agent },
+        { role: 'ai', text: answer, agent: data?.agent, chart: data?.chart },
       ]);
       if (voiceOut) speak(answer);
     } catch (e: any) {
@@ -123,7 +185,7 @@ export default function IAScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{agentName}</Text>
-          <Text style={s.headerSub}>Seu assistente financeiro · Gemini</Text>
+          <Text style={s.headerSub}>Seu assistente financeiro · Groq</Text>
         </View>
         {ttsOn && (
           <TouchableOpacity
@@ -190,7 +252,11 @@ export default function IAScreen() {
                   {msg.role === 'ai' && msg.agent && (
                     <View style={s.agentBadge}>
                       <Ionicons
-                        name={msg.agent === 'operador' ? 'create-outline' : 'analytics-outline'}
+                        name={
+                          msg.agent === 'operador' ? 'create-outline'
+                          : msg.agent === 'grafico' ? 'bar-chart-outline'
+                          : 'analytics-outline'
+                        }
                         size={10}
                         color={colors.textFaint}
                       />
@@ -200,6 +266,7 @@ export default function IAScreen() {
                   <Text style={[s.bubbleTxt, msg.role === 'user' && s.bubbleTxtUser]}>
                     {msg.text}
                   </Text>
+                  {msg.role === 'ai' && msg.chart && <ChatChart chart={msg.chart} />}
                 </View>
               </View>
             ))
@@ -221,7 +288,11 @@ export default function IAScreen() {
             style={s.input}
             value={input}
             onChangeText={setInput}
-            placeholder={listening ? 'Ouvindo… fale agora' : 'Pergunte sobre suas finanças…'}
+            placeholder={
+              recording ? 'Gravando… toque no microfone para enviar'
+              : transcribing ? 'Transcrevendo o áudio…'
+              : 'Pergunte sobre suas finanças…'
+            }
             placeholderTextColor={colors.placeholder}
             multiline
             returnKeyType="send"
@@ -229,15 +300,19 @@ export default function IAScreen() {
           />
           {micOn && (
             <TouchableOpacity
-              style={[s.sendBtn, s.micBtn, listening && s.micBtnActive]}
+              style={[s.sendBtn, s.micBtn, recording && s.micBtnActive]}
               onPress={toggleMic}
-              disabled={loading}
+              disabled={loading || transcribing}
             >
-              <Ionicons
-                name={listening ? 'stop' : 'mic'}
-                size={18}
-                color={listening ? colors.brandText : colors.text}
-              />
+              {transcribing ? (
+                <ActivityIndicator size="small" color={colors.text} />
+              ) : (
+                <Ionicons
+                  name={recording ? 'stop' : 'mic'}
+                  size={18}
+                  color={recording ? colors.brandText : colors.text}
+                />
+              )}
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -365,4 +440,24 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   voiceBtnActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+
+  // Gráfico no chat
+  chartCard: {
+    marginTop: 10,
+    backgroundColor: colors.bg,
+    borderRadius: 12,
+    borderWidth: 1, borderColor: colors.border,
+    padding: 12,
+  },
+  chartHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  chartTitle: { color: colors.text, fontSize: 13, fontWeight: '700', flex: 1 },
+  chartRowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  chartLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600', flex: 1, paddingRight: 8 },
+  chartValue: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  chartTrack: {
+    height: 7, borderRadius: 4,
+    backgroundColor: colors.surfaceAlt, overflow: 'hidden',
+  },
+  chartFill: { height: '100%', borderRadius: 4, backgroundColor: colors.text },
+  chartPct: { color: colors.textFaint, fontSize: 10, fontWeight: '600', alignSelf: 'flex-end' },
 });
