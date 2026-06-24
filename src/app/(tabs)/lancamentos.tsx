@@ -13,6 +13,10 @@ import {
 } from '../../lib/transactions';
 import { Category, listCategories } from '../../lib/categories';
 import { AccountWithBalance, listAccountsWithBalance } from '../../lib/accounts';
+import {
+  type PaymentMethod as PaymentMethodRow,
+  ensureDefaultPaymentMethods,
+} from '../../lib/paymentMethods';
 import { exportTransactionsCSV } from '../../lib/export';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
@@ -47,22 +51,6 @@ const TYPE_ICONS: Record<TransactionType, string> = {
   income:   'arrow-down-circle-outline',
   expense:  'arrow-up-circle-outline',
   transfer: 'swap-horizontal-outline',
-};
-
-const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
-  { key: 'pix',           label: 'Pix',            icon: 'qr-code-outline' },
-  { key: 'cash',          label: 'Dinheiro',       icon: 'cash-outline' },
-  { key: 'credit',        label: 'Crédito',        icon: 'card-outline' },
-  { key: 'debit',         label: 'Débito',         icon: 'card' },
-  { key: 'bank_transfer', label: 'Transf. banc.',  icon: 'swap-horizontal-outline' },
-];
-
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  pix: 'Pix',
-  cash: 'Dinheiro',
-  credit: 'Crédito',
-  debit: 'Débito',
-  bank_transfer: 'Transf. bancária',
 };
 
 const RECURRENCE_OPTS: { key: RecurrencePattern | 'none'; label: string }[] = [
@@ -162,6 +150,8 @@ export default function LancamentosScreen() {
   // dados auxiliares
   const [accounts, setAccounts]     = useState<AccountWithBalance[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodRow[]>([]);
+  const pmLabel = (key: string) => paymentMethods.find((p) => p.key === key)?.name ?? key;
 
   // modal form
   const [modalVisible, setModalVisible] = useState(false);
@@ -206,6 +196,10 @@ export default function LancamentosScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+    // Formas de pagamento — resiliente (tabela 007 pode não existir ainda).
+    try {
+      setPaymentMethods(await ensureDefaultPaymentMethods());
+    } catch { /* migração 007 ainda não rodou */ }
   }
 
   useEffect(() => { loadAll(); }, [month]);
@@ -488,7 +482,7 @@ export default function LancamentosScreen() {
         ) : null}
         {paymentFilter ? (
           <TouchableOpacity style={[s.chip, s.chipCat]} onPress={() => setPaymentFilter('')}>
-            <Text style={s.chipCatTxt} numberOfLines={1}>{PAYMENT_LABELS[paymentFilter]}</Text>
+            <Text style={s.chipCatTxt} numberOfLines={1}>{pmLabel(paymentFilter)}</Text>
             <Ionicons name="close" size={13} color={colors.textMuted} />
           </TouchableOpacity>
         ) : null}
@@ -554,7 +548,7 @@ export default function LancamentosScreen() {
                     {tx.type === 'transfer' && tx.to_account_name
                       ? ` → ${tx.to_account_name}` : ''}
                     {' · '}{fmtDate(tx.date)}
-                    {tx.payment_method ? ` · ${PAYMENT_LABELS[tx.payment_method]}` : ''}
+                    {tx.payment_method ? ` · ${pmLabel(tx.payment_method)}` : ''}
                   </Text>
                 </View>
               </View>
@@ -683,19 +677,19 @@ export default function LancamentosScreen() {
               <Text style={s.label}>Forma de pagamento</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}
                 contentContainerStyle={s.recRow} style={{ marginBottom: 16 }}>
-                {PAYMENT_METHODS.map((p) => (
+                {paymentMethods.map((p) => (
                   <TouchableOpacity
                     key={p.key}
                     style={[s.pmChip, paymentMethod === p.key && s.pmChipActive]}
                     onPress={() => setPaymentMethod(paymentMethod === p.key ? '' : p.key)}
                   >
                     <Ionicons
-                      name={p.icon as any}
+                      name={(p.icon ?? 'wallet-outline') as any}
                       size={14}
                       color={paymentMethod === p.key ? colors.brandText : colors.textMuted}
                     />
                     <Text style={[s.pmChipTxt, paymentMethod === p.key && s.pmChipTxtActive]}>
-                      {p.label}
+                      {p.name}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -852,10 +846,10 @@ export default function LancamentosScreen() {
         title="Filtrar por forma de pagamento"
         items={[
           { id: '', name: 'Todas as formas', color: null },
-          ...PAYMENT_METHODS.map((p) => ({ id: p.key, name: p.label, color: null })),
+          ...paymentMethods.map((p) => ({ id: p.key, name: p.name, color: null })),
         ]}
         selected={paymentFilter}
-        onSelect={(id) => setPaymentFilter(id as PaymentMethod | '')}
+        onSelect={(id) => setPaymentFilter(id)}
         onClose={() => setShowPayFilter(false)}
       />
     </View>

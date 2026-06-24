@@ -61,6 +61,15 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="pagamentos"
+        options={{
+          title: 'Pagamentos',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={'card-outline' as IconName} size={size} color={color as string} />
+          ),
+        }}
+      />
       {/* IA sempre na extrema direita do menu */}
       <Tabs.Screen
         name="ia"

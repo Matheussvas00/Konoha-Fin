@@ -115,11 +115,24 @@ export async function getPaymentBreakdown(): Promise<PaymentSlice[]> {
     const total = Array.from(map.values()).reduce((s, v) => s + v, 0);
     if (total === 0) return [];
 
+    // Resolve rótulo/ícone pelas formas cadastradas (tabela 007); cai no mapa
+    // fixo para keys legadas ou "none".
+    const custom = new Map<string, { label: string; icon: string }>();
+    try {
+      const { data: pms } = await supabase.from('payment_methods').select('key, name, icon');
+      for (const p of (pms ?? []) as any[]) {
+        custom.set(p.key, { label: p.name, icon: p.icon ?? 'wallet-outline' });
+      }
+    } catch { /* tabela pode não existir ainda */ }
+
+    const meta = (key: string) =>
+      custom.get(key) ?? PAYMENT_META[key] ?? { label: key, icon: PAYMENT_META.none.icon };
+
     return Array.from(map.entries())
       .map(([key, v]) => ({
         key,
-        label: (PAYMENT_META[key] ?? PAYMENT_META.none).label,
-        icon:  (PAYMENT_META[key] ?? PAYMENT_META.none).icon,
+        label: key === 'none' ? PAYMENT_META.none.label : meta(key).label,
+        icon:  key === 'none' ? PAYMENT_META.none.icon  : meta(key).icon,
         total: v,
         pct:   (v / total) * 100,
       }))

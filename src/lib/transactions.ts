@@ -9,9 +9,9 @@ export type TransactionStatus = 'effected' | 'pending';
 export type RecurrencePattern =
   | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual';
 
-// Formas de pagamento suportadas.
-export type PaymentMethod =
-  | 'pix' | 'cash' | 'credit' | 'debit' | 'bank_transfer';
+// Forma de pagamento: agora é a `key` de uma forma cadastrável pelo usuário
+// (tabela payment_methods). Mantida como string livre.
+export type PaymentMethod = string;
 
 export type Transaction = {
   id:          string;
