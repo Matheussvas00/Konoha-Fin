@@ -1,11 +1,13 @@
 // Supabase Edge Function — Assistente financeiro MULTIAGENTE (Groq, grátis).
 //
-//   ROTEADOR  -> classifica a mensagem em "analise" ou "acao".
+//   ROTEADOR  -> classifica a mensagem em "analise", "acao" ou "grafico".
 //   ANALISTA  -> somente leitura: relatórios/análises do mês.
 //   OPERADOR  -> escreve dados via function calling (lançamento, categoria,
 //                carteira, meta, orçamento, aporte).
+//   GRÁFICOS  -> escolhe um conjunto de dados real e o tipo de gráfico.
+//   Também transcreve voz (mode:'transcribe') com Whisper no Groq.
 //
-// Deploy:  supabase functions deploy ai-assistant
+// Deploy:  supabase functions deploy hyper-handler
 // Secret:  supabase secrets set GROQ_API_KEY=gsk_...   (pegue em console.groq.com)
 //          (SUPABASE_URL e SUPABASE_ANON_KEY são injetados automaticamente)
 
