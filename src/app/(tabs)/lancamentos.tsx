@@ -36,6 +36,53 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// ── Máscaras ────────────────────────────────────────────────────────────
+
+// Data brasileira DD/MM/AAAA enquanto o usuário digita.
+function maskDate(v: string): string {
+  const n = v.replace(/\D/g, '').slice(0, 8);
+  let out = n.slice(0, 2);
+  if (n.length >= 3) out += '/' + n.slice(2, 4);
+  if (n.length >= 5) out += '/' + n.slice(4, 8);
+  return out;
+}
+
+// DD/MM/AAAA -> AAAA-MM-DD (ou null se inválida).
+function brToISO(br: string): string | null {
+  const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const dd = +m[1], mm = +m[2];
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  const iso = `${m[3]}-${m[2]}-${m[1]}`;
+  const dt = new Date(iso + 'T00:00:00');
+  if (isNaN(dt.getTime()) || dt.getMonth() + 1 !== mm || dt.getDate() !== dd) return null;
+  return iso;
+}
+
+// AAAA-MM-DD -> DD/MM/AAAA.
+function isoToBR(iso: string): string {
+  const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+
+function todayBR(): string {
+  return isoToBR(todayISO());
+}
+
+// Valor em moeda: "1234567" (centavos digitados) -> "12.345,67".
+function maskMoney(v: string): string {
+  const digits = v.replace(/\D/g, '');
+  if (!digits) return '';
+  const value = (parseInt(digits, 10) / 100).toFixed(2);
+  const [int, dec] = value.split('.');
+  return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${dec}`;
+}
+
+function parseMoney(v: string): number {
+  const digits = v.replace(/\D/g, '');
+  return digits ? parseInt(digits, 10) / 100 : 0;
+}
+
 const TYPE_LABELS: Record<TransactionType, string> = {
   income:   'Receita',
   expense:  'Despesa',
@@ -201,7 +248,7 @@ export default function LancamentosScreen() {
   const [categoryId, setCategoryId]   = useState('');
   const [description, setDescription] = useState('');
   const [amountStr, setAmountStr]     = useState('');
-  const [date, setDate]               = useState(todayISO());
+  const [date, setDate]               = useState(todayBR());
   const [isPending, setIsPending]     = useState(false);
   const [notes, setNotes]             = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
@@ -273,7 +320,7 @@ export default function LancamentosScreen() {
     setCategoryId('');
     setDescription('');
     setAmountStr('');
-    setDate(todayISO());
+    setDate(todayBR());
     setIsPending(false);
     setNotes('');
     setPaymentMethod('');
@@ -290,8 +337,8 @@ export default function LancamentosScreen() {
     setToAccountId(tx.to_account_id ?? '');
     setCategoryId(tx.category_id ?? '');
     setDescription(tx.description);
-    setAmountStr(tx.amount.toFixed(2).replace('.', ','));
-    setDate(tx.date);
+    setAmountStr(maskMoney(String(Math.round(tx.amount * 100))));
+    setDate(isoToBR(tx.date));
     setIsPending(tx.status === 'pending');
     setNotes(tx.notes ?? '');
     setPaymentMethod(tx.payment_method ?? '');
@@ -306,10 +353,18 @@ export default function LancamentosScreen() {
   async function handleSave() {
     if (!description.trim()) { notify('Atenção', 'Digite uma descrição.'); return; }
     if (!accountId)          { notify('Atenção', 'Selecione a conta.'); return; }
-    const amount = parseFloat(amountStr.replace(/\./g, '').replace(',', '.'));
+    const amount = parseMoney(amountStr);
     if (!amount || amount <= 0) { notify('Atenção', 'Valor inválido.'); return; }
     if (txType === 'transfer' && !toAccountId) {
       notify('Atenção', 'Selecione a conta de destino.'); return;
+    }
+    const isoDate = brToISO(date);
+    if (!isoDate) { notify('Atenção', 'Data inválida. Use DD/MM/AAAA.'); return; }
+    let isoRecEnd: string | undefined;
+    if (!editing && recurrence !== 'none' && recurrenceEnd.trim()) {
+      const parsed = brToISO(recurrenceEnd);
+      if (!parsed) { notify('Atenção', 'Data final da recorrência inválida (DD/MM/AAAA).'); return; }
+      isoRecEnd = parsed;
     }
 
     setSaving(true);
@@ -323,11 +378,11 @@ export default function LancamentosScreen() {
         status:        isPending ? 'pending' : 'effected',
         description:   description.trim(),
         amount,
-        date,
+        date: isoDate,
         notes: notes.trim() || undefined,
         payment_method: paymentMethod || undefined,
         recurrence:     recurring ? (recurrence as RecurrencePattern) : undefined,
-        recurrence_end: recurring && recurrenceEnd.trim() ? recurrenceEnd.trim() : undefined,
+        recurrence_end: isoRecEnd,
       };
 
       if (editing) {
@@ -691,7 +746,7 @@ export default function LancamentosScreen() {
               <TextInput
                 style={[s.input, s.inputLarge]}
                 value={amountStr}
-                onChangeText={setAmountStr}
+                onChangeText={(t) => setAmountStr(maskMoney(t))}
                 placeholder="0,00"
                 placeholderTextColor={colors.placeholder}
                 keyboardType="decimal-pad"
@@ -778,12 +833,12 @@ export default function LancamentosScreen() {
               </ScrollView>
 
               {/* Data */}
-              <Text style={s.label}>Data (AAAA-MM-DD)</Text>
+              <Text style={s.label}>Data (DD/MM/AAAA)</Text>
               <TextInput
                 style={s.input}
                 value={date}
-                onChangeText={setDate}
-                placeholder="2025-06-07"
+                onChangeText={(t) => setDate(maskDate(t))}
+                placeholder="07/06/2025"
                 placeholderTextColor={colors.placeholder}
                 keyboardType="numeric"
                 maxLength={10}
@@ -824,11 +879,11 @@ export default function LancamentosScreen() {
 
                   {recurrence !== 'none' && (
                     <>
-                      <Text style={s.label}>Repetir até (opcional, AAAA-MM-DD)</Text>
+                      <Text style={s.label}>Repetir até (opcional, DD/MM/AAAA)</Text>
                       <TextInput
                         style={s.input}
                         value={recurrenceEnd}
-                        onChangeText={setRecurrenceEnd}
+                        onChangeText={(t) => setRecurrenceEnd(maskDate(t))}
                         placeholder="vazio = sem fim"
                         placeholderTextColor={colors.placeholder}
                         keyboardType="numeric"
