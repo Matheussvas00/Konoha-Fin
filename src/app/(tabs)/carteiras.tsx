@@ -13,6 +13,11 @@ import {
   listArchivedAccounts, restoreAccount, deleteAccount,
   BalanceEntry, addBalanceEntry, listBalanceEntries, deleteBalanceEntry,
 } from '../../lib/accounts';
+import {
+  WalletType, WALLET_TYPE_ICONS, WALLET_TYPE_COLORS, walletTypeMeta,
+  listWalletTypes, ensureDefaultWalletTypes,
+  createWalletType, updateWalletType, deleteWalletType,
+} from '../../lib/walletTypes';
 import { confirmAction, notify } from '../../lib/confirm';
 import { maskMoney, parseMoney, maskDate, brToISO, isoToBR, todayBR } from '../../lib/masks';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
@@ -32,6 +37,14 @@ const PRESET_COLORS = [
   '#ea580c', '#e63946', '#0891b2', '#64748b',
   '#db2777', '#059669',
 ];
+
+// Fallback usado enquanto a tabela wallet_types (migração 008) não existe:
+// mantém o seletor de tipos funcionando com os tipos padrão.
+const FALLBACK_TYPES: WalletType[] = ACCOUNT_TYPES.map((k, i) => ({
+  id: k, user_id: '', key: k, name: ACCOUNT_TYPE_LABELS[k],
+  icon: ACCOUNT_TYPE_ICONS[k], color: ACCOUNT_TYPE_COLORS[k],
+  is_default: true, sort: i, created_at: '',
+}));
 
 // ── Componente ────────────────────────────────────────────────────────
 export default function CarteirasScreen() {
@@ -54,6 +67,15 @@ export default function CarteirasScreen() {
   const [formColor, setFormColor]     = useState(ACCOUNT_TYPE_COLORS.checking);
   const [saving, setSaving]           = useState(false);
 
+  // tipos de carteira (CRUD)
+  const [walletTypes, setWalletTypes]       = useState<WalletType[]>([]);
+  const [typesModal, setTypesModal]         = useState(false);
+  const [typeEditing, setTypeEditing]       = useState<WalletType | null>(null);
+  const [typeName, setTypeName]             = useState('');
+  const [typeIcon, setTypeIcon]             = useState(WALLET_TYPE_ICONS[0]);
+  const [typeColor, setTypeColor]           = useState(WALLET_TYPE_COLORS[0]);
+  const [typeSaving, setTypeSaving]         = useState(false);
+
   // implantação de saldo
   const [balanceWallet, setBalanceWallet]   = useState<AccountWithBalance | null>(null);
   const [balanceEntries, setBalanceEntries] = useState<BalanceEntry[]>([]);
@@ -73,17 +95,26 @@ export default function CarteirasScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+    // Tipos de carteira — resiliente (tabela 008 pode não existir ainda).
+    try {
+      setWalletTypes(await ensureDefaultWalletTypes());
+    } catch { /* migração 008 ainda não rodou */ }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const tMeta = (key: string) => walletTypeMeta(key, walletTypes);
+  // Opções mostradas no seletor de tipo (fallback fixo se a 008 não rodou).
+  const typeOptions = walletTypes.length ? walletTypes : FALLBACK_TYPES;
 
   // ── Modal ───────────────────────────────────────────────────────────
   function openCreate() {
     setEditingId(null);
     setFormName('');
-    setFormType('checking');
+    const def = typeOptions[0];
+    setFormType(def?.key ?? 'checking');
     setFormBalance('');
-    setFormColor(ACCOUNT_TYPE_COLORS.checking);
+    setFormColor(def?.color ?? ACCOUNT_TYPE_COLORS.checking);
     setModalVisible(true);
   }
 
@@ -174,6 +205,60 @@ export default function CarteirasScreen() {
           await deleteBalanceEntry(entry.id);
           setBalanceEntries((prev) => prev.filter((e) => e.id !== entry.id));
           await load();
+        } catch (e: any) {
+          notify('Erro', e.message);
+        }
+      },
+    });
+  }
+
+  // ── Tipos de carteira (CRUD) ────────────────────────────────────────
+  function openTypesModal() {
+    setTypeEditing(null);
+    setTypeName('');
+    setTypeIcon(WALLET_TYPE_ICONS[0]);
+    setTypeColor(WALLET_TYPE_COLORS[0]);
+    setTypesModal(true);
+  }
+
+  function editType(t: WalletType) {
+    setTypeEditing(t);
+    setTypeName(t.name);
+    setTypeIcon(t.icon ?? WALLET_TYPE_ICONS[0]);
+    setTypeColor(t.color ?? WALLET_TYPE_COLORS[0]);
+  }
+
+  async function saveType() {
+    if (!typeName.trim()) { notify('Atenção', 'Digite o nome do tipo.'); return; }
+    setTypeSaving(true);
+    try {
+      if (typeEditing) {
+        await updateWalletType(typeEditing.id, { name: typeName.trim(), icon: typeIcon, color: typeColor });
+      } else {
+        await createWalletType({ name: typeName.trim(), icon: typeIcon, color: typeColor });
+      }
+      setTypeEditing(null);
+      setTypeName('');
+      setTypeIcon(WALLET_TYPE_ICONS[0]);
+      setTypeColor(WALLET_TYPE_COLORS[0]);
+      setWalletTypes(await listWalletTypes());
+    } catch (e: any) {
+      notify('Erro', e.message);
+    } finally {
+      setTypeSaving(false);
+    }
+  }
+
+  function removeType(t: WalletType) {
+    confirmAction({
+      title: 'Excluir tipo',
+      message: `Excluir "${t.name}"? Só é possível excluir tipos sem carteiras vinculadas.`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteWalletType(t);
+          setWalletTypes((prev) => prev.filter((x) => x.id !== t.id));
         } catch (e: any) {
           notify('Erro', e.message);
         }
@@ -316,7 +401,7 @@ export default function CarteirasScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const color = item.color ?? ACCOUNT_TYPE_COLORS[item.type];
+          const color = item.color ?? tMeta(item.type).color;
           return (
             <TouchableOpacity
               style={[styles.card, { borderLeftColor: color }]}
@@ -326,7 +411,7 @@ export default function CarteirasScreen() {
               {/* Ícone */}
               <View style={[styles.iconWrap, { backgroundColor: color + '25' }]}>
                 <Ionicons
-                  name={ACCOUNT_TYPE_ICONS[item.type] as any}
+                  name={tMeta(item.type).icon as any}
                   size={22}
                   color={color}
                 />
@@ -335,7 +420,7 @@ export default function CarteirasScreen() {
               {/* Nome + tipo */}
               <View style={styles.cardBody}>
                 <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.cardType}>{ACCOUNT_TYPE_LABELS[item.type]}</Text>
+                <Text style={styles.cardType}>{tMeta(item.type).label}</Text>
               </View>
 
               {/* Saldo + arquivar */}
@@ -400,34 +485,39 @@ export default function CarteirasScreen() {
             />
 
             {/* Tipo */}
-            <Text style={styles.fieldLabel}>Tipo</Text>
+            <View style={styles.fieldHeaderRow}>
+              <Text style={styles.fieldLabel}>Tipo</Text>
+              <TouchableOpacity onPress={openTypesModal} hitSlop={8}>
+                <Text style={styles.manageLink}>Gerenciar tipos</Text>
+              </TouchableOpacity>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.chipRow}
               contentContainerStyle={{ paddingRight: 16 }}
             >
-              {ACCOUNT_TYPES.map((t) => {
-                const active = formType === t;
-                const col    = ACCOUNT_TYPE_COLORS[t];
+              {typeOptions.map((t) => {
+                const active = formType === t.key;
+                const col    = t.color ?? '#64748b';
                 return (
                   <TouchableOpacity
-                    key={t}
+                    key={t.id}
                     style={[styles.typeChip, active && { backgroundColor: col, borderColor: col }]}
                     onPress={() => {
-                      setFormType(t);
+                      setFormType(t.key);
                       // Ao mudar o tipo, atualiza a cor sugerida se ela ainda era padrão
                       if (!editingId) setFormColor(col);
                     }}
                     activeOpacity={0.8}
                   >
                     <Ionicons
-                      name={ACCOUNT_TYPE_ICONS[t] as any}
+                      name={(t.icon ?? 'wallet-outline') as any}
                       size={14}
                       color={active ? colors.text : colors.textMuted}
                     />
                     <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                      {ACCOUNT_TYPE_LABELS[t]}
+                      {t.name}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -567,6 +657,101 @@ export default function CarteirasScreen() {
         </View>
       </Modal>
 
+      {/* ── Modal de tipos de carteira (CRUD) ────────────────────────── */}
+      <Modal
+        visible={typesModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setTypesModal(false)}
+      >
+        <View style={styles.modalRoot}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setTypesModal(false)} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.sheet}
+        >
+          <View style={styles.sheetHandle} />
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={styles.sheetTitle}>Tipos de carteira</Text>
+
+            <Text style={styles.fieldLabel}>{typeEditing ? 'Editar tipo' : 'Nome do novo tipo'}</Text>
+            <TextInput
+              style={styles.input}
+              value={typeName}
+              onChangeText={setTypeName}
+              placeholder="Ex.: Cripto, Vale, Empresa…"
+              placeholderTextColor={colors.placeholder}
+              maxLength={40}
+            />
+
+            <Text style={styles.fieldLabel}>Ícone</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}
+              contentContainerStyle={{ gap: 8 }}>
+              {WALLET_TYPE_ICONS.map((ic) => (
+                <TouchableOpacity
+                  key={ic}
+                  style={[styles.typeIconOption, typeIcon === ic && { borderColor: typeColor, backgroundColor: typeColor + '22' }]}
+                  onPress={() => setTypeIcon(ic)}
+                >
+                  <Ionicons name={ic as any} size={20} color={typeIcon === ic ? typeColor : colors.textMuted} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.fieldLabel}>Cor</Text>
+            <View style={styles.colorRow}>
+              {WALLET_TYPE_COLORS.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.colorDot, { backgroundColor: c }, typeColor === c && styles.colorDotActive]}
+                  onPress={() => setTypeColor(c)}
+                />
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+              {typeEditing && (
+                <TouchableOpacity
+                  style={styles.btnCancel}
+                  onPress={() => { setTypeEditing(null); setTypeName(''); }}
+                >
+                  <Text style={styles.btnCancelTxt}>Cancelar</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.addBalanceBtn, { flex: 1 }, typeSaving && { opacity: 0.7 }]}
+                onPress={saveType}
+                disabled={typeSaving}
+                activeOpacity={0.85}
+              >
+                <Ionicons name={typeEditing ? 'checkmark' : 'add'} size={18} color={colors.brandText} />
+                <Text style={styles.addBalanceTxt}>
+                  {typeSaving ? 'Salvando…' : typeEditing ? 'Salvar' : 'Adicionar tipo'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.fieldLabel, { marginTop: 22 }]}>Tipos cadastrados</Text>
+            {walletTypes.map((t) => (
+              <View key={t.id} style={styles.histRow}>
+                <View style={[styles.typeDot, { backgroundColor: (t.color ?? '#64748b') + '25' }]}>
+                  <Ionicons name={(t.icon ?? 'wallet-outline') as any} size={16} color={t.color ?? '#64748b'} />
+                </View>
+                <Text style={styles.histDate}>{t.name}{t.is_default ? '  · padrão' : ''}</Text>
+                <TouchableOpacity onPress={() => editType(t)} hitSlop={8} style={{ marginRight: 12 }}>
+                  <Ionicons name="create-outline" size={17} color={colors.textMuted} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => removeType(t)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={16} color={colors.expense} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <View style={{ height: 30 }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
       {/* ── Modal de carteiras arquivadas ────────────────────────────── */}
       <Modal
         visible={archivedVisible}
@@ -592,15 +777,15 @@ export default function CarteirasScreen() {
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
               {archived.map((item) => {
-                const color = item.color ?? ACCOUNT_TYPE_COLORS[item.type];
+                const color = item.color ?? tMeta(item.type).color;
                 return (
                   <View key={item.id} style={styles.archivedRow}>
                     <View style={[styles.iconWrap, { backgroundColor: color + '25' }]}>
-                      <Ionicons name={ACCOUNT_TYPE_ICONS[item.type] as any} size={20} color={color} />
+                      <Ionicons name={tMeta(item.type).icon as any} size={20} color={color} />
                     </View>
                     <View style={styles.cardBody}>
                       <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-                      <Text style={styles.cardType}>{ACCOUNT_TYPE_LABELS[item.type]}</Text>
+                      <Text style={styles.cardType}>{tMeta(item.type).label}</Text>
                     </View>
                     <TouchableOpacity
                       style={styles.restoreBtn}
@@ -847,6 +1032,15 @@ const styles = StyleSheet.create({
   },
   histDate: { color: colors.textMuted, fontSize: 13, flex: 1 },
   histVal: { color: colors.text, fontSize: 14, fontWeight: '700' },
+
+  // Tipos de carteira (gerenciamento)
+  fieldHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  manageLink: { color: colors.text, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
+  typeIconOption: {
+    width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg,
+  },
+  typeDot: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
   // Empty state
   emptyWrap: {

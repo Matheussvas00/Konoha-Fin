@@ -1,13 +1,9 @@
 import { supabase } from './supabase';
 
 // ── Tipos ──────────────────────────────────────────────────────────────
-export type AccountType =
-  | 'checking'
-  | 'savings'
-  | 'cash'
-  | 'credit_card'
-  | 'investment'
-  | 'other';
+// O tipo da carteira agora é a `key` de um tipo cadastrável pelo usuário
+// (tabela wallet_types). Mantido como string livre.
+export type AccountType = string;
 
 export type Account = {
   id: string;
