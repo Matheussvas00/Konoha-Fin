@@ -12,7 +12,7 @@ import {
   listAccountsWithBalance, createAccount, updateAccount, archiveAccount,
   listArchivedAccounts, restoreAccount, deleteAccount,
 } from '../../lib/accounts';
-import { confirmAction } from '../../lib/confirm';
+import { confirmAction, notify } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ export default function CarteirasScreen() {
       const data = await listAccountsWithBalance();
       setAccounts(data);
     } catch (e: any) {
-      Alert.alert('Erro ao carregar carteiras', e.message);
+      notify('Erro ao carregar carteiras', e.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -93,7 +93,7 @@ export default function CarteirasScreen() {
 
   async function handleSave() {
     if (!formName.trim()) {
-      Alert.alert('Atenção', 'O nome da carteira não pode ficar em branco.');
+      notify('Atenção', 'O nome da carteira não pode ficar em branco.');
       return;
     }
 
@@ -116,7 +116,7 @@ export default function CarteirasScreen() {
       closeModal();
       await load();
     } catch (e: any) {
-      Alert.alert('Erro ao salvar', e.message);
+      notify('Erro ao salvar', e.message);
     } finally {
       setSaving(false);
     }
@@ -133,7 +133,7 @@ export default function CarteirasScreen() {
           await archiveAccount(account.id);
           await load();
         } catch (e: any) {
-          Alert.alert('Erro', e.message);
+          notify('Erro', e.message);
         }
       },
     });
@@ -147,7 +147,7 @@ export default function CarteirasScreen() {
       const data = await listArchivedAccounts();
       setArchived(data);
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
     } finally {
       setArchivedLoading(false);
     }
@@ -159,7 +159,7 @@ export default function CarteirasScreen() {
       setArchived((prev) => prev.filter((a) => a.id !== account.id));
       await load();
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
     }
   }
 
@@ -174,7 +174,7 @@ export default function CarteirasScreen() {
           await deleteAccount(account.id);
           setArchived((prev) => prev.filter((a) => a.id !== account.id));
         } catch (e: any) {
-          Alert.alert('Não foi possível excluir', e.message);
+          notify('Não foi possível excluir', e.message);
         }
       },
     });

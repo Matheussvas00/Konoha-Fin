@@ -11,7 +11,7 @@ import {
   CATEGORY_COLORS, EXPENSE_ICONS, INCOME_ICONS,
   listCategories, createCategory, updateCategory, deleteCategory,
 } from '../../lib/categories';
-import { confirmAction } from '../../lib/confirm';
+import { confirmAction, notify } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ export default function CategoriasScreen() {
       const data = await listCategories();
       setCategories(data);
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -77,7 +77,7 @@ export default function CategoriasScreen() {
   }
 
   async function handleSave() {
-    if (!name.trim()) { Alert.alert('Atenção', 'Digite o nome da categoria.'); return; }
+    if (!name.trim()) { notify('Atenção', 'Digite o nome da categoria.'); return; }
     setSaving(true);
     try {
       if (editing) {
@@ -88,7 +88,7 @@ export default function CategoriasScreen() {
       setModalVisible(false);
       await load();
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
     } finally {
       setSaving(false);
     }
@@ -105,7 +105,7 @@ export default function CategoriasScreen() {
           await deleteCategory(cat.id);
           setCategories((prev) => prev.filter((c) => c.id !== cat.id));
         } catch (e: any) {
-          Alert.alert('Erro', e.message);
+          notify('Erro', e.message);
         }
       },
     });

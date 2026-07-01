@@ -18,7 +18,7 @@ import {
   ensureDefaultPaymentMethods,
 } from '../../lib/paymentMethods';
 import { exportTransactionsCSV } from '../../lib/export';
-import { confirmAction } from '../../lib/confirm';
+import { confirmAction, notify } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ export default function LancamentosScreen() {
       setAccounts(accs);
       setCategories(cats);
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -245,12 +245,12 @@ export default function LancamentosScreen() {
   // ── Save ──────────────────────────────────────────────────────────
 
   async function handleSave() {
-    if (!description.trim()) { Alert.alert('Atenção', 'Digite uma descrição.'); return; }
-    if (!accountId)          { Alert.alert('Atenção', 'Selecione a conta.'); return; }
+    if (!description.trim()) { notify('Atenção', 'Digite uma descrição.'); return; }
+    if (!accountId)          { notify('Atenção', 'Selecione a conta.'); return; }
     const amount = parseFloat(amountStr.replace(/\./g, '').replace(',', '.'));
-    if (!amount || amount <= 0) { Alert.alert('Atenção', 'Valor inválido.'); return; }
+    if (!amount || amount <= 0) { notify('Atenção', 'Valor inválido.'); return; }
     if (txType === 'transfer' && !toAccountId) {
-      Alert.alert('Atenção', 'Selecione a conta de destino.'); return;
+      notify('Atenção', 'Selecione a conta de destino.'); return;
     }
 
     setSaving(true);
@@ -279,7 +279,7 @@ export default function LancamentosScreen() {
       setModalVisible(false);
       await loadAll();
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
     } finally {
       setSaving(false);
     }
@@ -298,7 +298,7 @@ export default function LancamentosScreen() {
           await deleteTransaction(tx.id);
           setTransactions((p) => p.filter((t) => t.id !== tx.id));
           setModalVisible(false);
-        } catch (e: any) { Alert.alert('Erro', e.message); }
+        } catch (e: any) { notify('Erro', e.message); }
       },
     });
   }
@@ -313,7 +313,7 @@ export default function LancamentosScreen() {
             : t
         )
       );
-    } catch (e: any) { Alert.alert('Erro', e.message); }
+    } catch (e: any) { notify('Erro', e.message); }
   }
 
   // ── Exportar ──────────────────────────────────────────────────────
@@ -321,17 +321,17 @@ export default function LancamentosScreen() {
   async function handleExport() {
     if (exporting) return;
     if (filtered.length === 0) {
-      Alert.alert('Exportar', 'Não há lançamentos para exportar.');
+      notify('Exportar', 'Não há lançamentos para exportar.');
       return;
     }
     setExporting(true);
     try {
       const res = await exportTransactionsCSV(filtered, `lancamentos-${month}`);
       if (!res.shared) {
-        Alert.alert('CSV gerado', `Arquivo salvo em:\n${res.uri ?? ''}`);
+        notify('CSV gerado', `Arquivo salvo em:\n${res.uri ?? ''}`);
       }
     } catch (e: any) {
-      Alert.alert('Erro ao exportar', e.message ?? String(e));
+      notify('Erro ao exportar', e.message ?? String(e));
     } finally {
       setExporting(false);
     }

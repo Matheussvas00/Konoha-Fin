@@ -36,3 +36,16 @@ export function confirmAction(opts: {
     { text: confirmLabel, style: destructive ? 'destructive' : 'default', onPress: () => { void onConfirm(); } },
   ]);
 }
+
+/**
+ * Mostra uma mensagem simples. No navegador o `Alert.alert` é praticamente um
+ * no-op, então usamos `window.alert` para o usuário realmente ver erros/avisos.
+ */
+export function notify(title: string, message?: string) {
+  const text = message ? `${title}\n\n${message}` : title;
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(text);
+    return;
+  }
+  Alert.alert(title, message);
+}

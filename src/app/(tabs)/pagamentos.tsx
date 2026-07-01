@@ -10,7 +10,7 @@ import {
   listPaymentMethods, ensureDefaultPaymentMethods,
   createPaymentMethod, updatePaymentMethod, deletePaymentMethod,
 } from '../../lib/paymentMethods';
-import { confirmAction } from '../../lib/confirm';
+import { confirmAction, notify } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ export default function PagamentosScreen() {
       const data = await ensureDefaultPaymentMethods();
       setMethods(data);
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
       try { setMethods(await listPaymentMethods()); } catch { /* noop */ }
     } finally {
       setLoading(false);
@@ -61,7 +61,7 @@ export default function PagamentosScreen() {
   }
 
   async function handleSave() {
-    if (!name.trim()) { Alert.alert('Atenção', 'Digite o nome da forma de pagamento.'); return; }
+    if (!name.trim()) { notify('Atenção', 'Digite o nome da forma de pagamento.'); return; }
     setSaving(true);
     try {
       if (editing) {
@@ -72,7 +72,7 @@ export default function PagamentosScreen() {
       setModalVisible(false);
       await load();
     } catch (e: any) {
-      Alert.alert('Erro', e.message);
+      notify('Erro', e.message);
     } finally {
       setSaving(false);
     }
@@ -89,7 +89,7 @@ export default function PagamentosScreen() {
           await deletePaymentMethod(pm);
           setMethods((prev) => prev.filter((m) => m.id !== pm.id));
         } catch (e: any) {
-          Alert.alert('Erro', e.message);
+          notify('Erro', e.message);
         }
       },
     });
