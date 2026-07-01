@@ -11,6 +11,7 @@ import {
   Profile, getMyProfile, updateMyProfile, validateUsername,
 } from '../../lib/profile';
 import { getAgentName, setAgentName as saveAgentName } from '../../lib/agent';
+import { confirmAction } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 export default function PerfilScreen() {
@@ -80,10 +81,13 @@ export default function PerfilScreen() {
   }
 
   function confirmSignOut() {
-    Alert.alert('Sair', 'Deseja realmente sair da sua conta?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Sair', style: 'destructive', onPress: () => signOut() },
-    ]);
+    confirmAction({
+      title: 'Sair da conta',
+      message: 'Deseja realmente sair da sua conta?',
+      confirmLabel: 'Sair',
+      destructive: true,
+      onConfirm: () => signOut(),
+    });
   }
 
   const initial = (fullName.trim() || 'N').charAt(0).toUpperCase();

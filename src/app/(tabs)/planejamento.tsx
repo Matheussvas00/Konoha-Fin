@@ -16,6 +16,7 @@ import {
   goalProgress, GOAL_COLORS, GOAL_ICONS,
 } from '../../lib/goals';
 import { Category, listCategoriesByType } from '../../lib/categories';
+import { confirmAction } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -146,16 +147,16 @@ function BudgetsTab({ search }: { search: string }) {
   }
 
   function confirmDelete(b: BudgetProgress) {
-    Alert.alert('Remover orçamento', `Remover o limite de "${b.categoryName}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover', style: 'destructive',
-        onPress: async () => {
-          try { await deleteBudget(b.id); await load(); }
-          catch (e: any) { Alert.alert('Erro', e.message); }
-        },
+    confirmAction({
+      title: 'Remover orçamento',
+      message: `Remover o limite de "${b.categoryName}"?`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: async () => {
+        try { await deleteBudget(b.id); await load(); }
+        catch (e: any) { Alert.alert('Erro', e.message); }
       },
-    ]);
+    });
   }
 
   const totalLimit = items.reduce((s, b) => s + b.amount, 0);
@@ -365,6 +366,20 @@ function GoalsTab({ search }: { search: string }) {
   }
 
   function promptContribute(goal: Goal, sign: 1 | -1) {
+    // Web: Alert.prompt não existe → usa window.prompt.
+    if (Platform.OS === 'web') {
+      const txt = typeof window !== 'undefined' && window.prompt
+        ? window.prompt(`${sign === 1 ? 'Adicionar aporte' : 'Retirar valor'} — ${goal.name}\n\nInforme o valor (R$):`, '')
+        : null;
+      if (txt == null) return;
+      const v = parseInput(txt);
+      if (v <= 0) return;
+      (async () => {
+        try { await contributeGoal(goal, sign * v); await load(); }
+        catch (e: any) { Alert.alert('Erro', e.message); }
+      })();
+      return;
+    }
     Alert.prompt?.(
       sign === 1 ? 'Adicionar aporte' : 'Retirar valor',
       `Meta: ${goal.name}`,
@@ -398,16 +413,16 @@ function GoalsTab({ search }: { search: string }) {
   }
 
   function confirmDelete(goal: Goal) {
-    Alert.alert('Excluir meta', `Excluir "${goal.name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir', style: 'destructive',
-        onPress: async () => {
-          try { await deleteGoal(goal.id); await load(); }
-          catch (e: any) { Alert.alert('Erro', e.message); }
-        },
+    confirmAction({
+      title: 'Excluir meta',
+      message: `Excluir "${goal.name}"?`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: async () => {
+        try { await deleteGoal(goal.id); await load(); }
+        catch (e: any) { Alert.alert('Erro', e.message); }
       },
-    ]);
+    });
   }
 
   const q = search.trim().toLowerCase();

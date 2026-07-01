@@ -11,6 +11,7 @@ import {
   CATEGORY_COLORS, EXPENSE_ICONS, INCOME_ICONS,
   listCategories, createCategory, updateCategory, deleteCategory,
 } from '../../lib/categories';
+import { confirmAction } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -94,25 +95,20 @@ export default function CategoriasScreen() {
   }
 
   function confirmDelete(cat: Category) {
-    Alert.alert(
-      'Excluir categoria',
-      `Deseja excluir "${cat.name}"? Só é possível excluir categorias sem lançamentos ou orçamentos vinculados.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteCategory(cat.id);
-              setCategories((prev) => prev.filter((c) => c.id !== cat.id));
-            } catch (e: any) {
-              Alert.alert('Erro', e.message);
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Excluir categoria',
+      message: `Deseja excluir "${cat.name}"? Só é possível excluir categorias sem lançamentos ou orçamentos vinculados.`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteCategory(cat.id);
+          setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+        } catch (e: any) {
+          Alert.alert('Erro', e.message);
+        }
+      },
+    });
   }
 
   const q = search.trim().toLowerCase();

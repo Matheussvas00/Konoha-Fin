@@ -12,6 +12,7 @@ import {
   listAccountsWithBalance, createAccount, updateAccount, archiveAccount,
   listArchivedAccounts, restoreAccount, deleteAccount,
 } from '../../lib/accounts';
+import { confirmAction } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -122,25 +123,20 @@ export default function CarteirasScreen() {
   }
 
   function confirmArchive(account: AccountWithBalance) {
-    Alert.alert(
-      'Arquivar carteira',
-      `Arquivar "${account.name}"?\n\nEla sai da lista, mas todos os lançamentos são preservados.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Arquivar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await archiveAccount(account.id);
-              await load();
-            } catch (e: any) {
-              Alert.alert('Erro', e.message);
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Arquivar carteira',
+      message: `Arquivar "${account.name}"?\n\nEla sai da lista, mas todos os lançamentos são preservados.`,
+      confirmLabel: 'Arquivar',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await archiveAccount(account.id);
+          await load();
+        } catch (e: any) {
+          Alert.alert('Erro', e.message);
+        }
+      },
+    });
   }
 
   // ── Arquivadas ───────────────────────────────────────────────────────
@@ -168,25 +164,20 @@ export default function CarteirasScreen() {
   }
 
   function confirmDelete(account: Account) {
-    Alert.alert(
-      'Excluir carteira',
-      `Excluir "${account.name}" definitivamente?\n\nEsta ação não pode ser desfeita.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteAccount(account.id);
-              setArchived((prev) => prev.filter((a) => a.id !== account.id));
-            } catch (e: any) {
-              Alert.alert('Não foi possível excluir', e.message);
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Excluir carteira',
+      message: `Excluir "${account.name}" definitivamente?\n\nEsta ação não pode ser desfeita.`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteAccount(account.id);
+          setArchived((prev) => prev.filter((a) => a.id !== account.id));
+        } catch (e: any) {
+          Alert.alert('Não foi possível excluir', e.message);
+        }
+      },
+    });
   }
 
   // ── Totais ───────────────────────────────────────────────────────────

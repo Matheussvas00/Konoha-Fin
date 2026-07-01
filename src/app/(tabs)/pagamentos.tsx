@@ -10,6 +10,7 @@ import {
   listPaymentMethods, ensureDefaultPaymentMethods,
   createPaymentMethod, updatePaymentMethod, deletePaymentMethod,
 } from '../../lib/paymentMethods';
+import { confirmAction } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -78,25 +79,20 @@ export default function PagamentosScreen() {
   }
 
   function confirmDelete(pm: PaymentMethod) {
-    Alert.alert(
-      'Excluir forma de pagamento',
-      `Deseja excluir "${pm.name}"? Só é possível excluir formas sem lançamentos vinculados.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletePaymentMethod(pm);
-              setMethods((prev) => prev.filter((m) => m.id !== pm.id));
-            } catch (e: any) {
-              Alert.alert('Erro', e.message);
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Excluir forma de pagamento',
+      message: `Deseja excluir "${pm.name}"? Só é possível excluir formas sem lançamentos vinculados.`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await deletePaymentMethod(pm);
+          setMethods((prev) => prev.filter((m) => m.id !== pm.id));
+        } catch (e: any) {
+          Alert.alert('Erro', e.message);
+        }
+      },
+    });
   }
 
   const q = search.trim().toLowerCase();

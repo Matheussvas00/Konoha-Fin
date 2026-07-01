@@ -18,6 +18,7 @@ import {
   ensureDefaultPaymentMethods,
 } from '../../lib/paymentMethods';
 import { exportTransactionsCSV } from '../../lib/export';
+import { confirmAction } from '../../lib/confirm';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -287,18 +288,19 @@ export default function LancamentosScreen() {
   // ── Delete / toggle ───────────────────────────────────────────────
 
   function confirmDelete(tx: TransactionRow) {
-    Alert.alert('Excluir lançamento', `Excluir "${tx.description}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir', style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteTransaction(tx.id);
-            setTransactions((p) => p.filter((t) => t.id !== tx.id));
-          } catch (e: any) { Alert.alert('Erro', e.message); }
-        },
+    confirmAction({
+      title: 'Excluir lançamento',
+      message: `Excluir "${tx.description}"?`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteTransaction(tx.id);
+          setTransactions((p) => p.filter((t) => t.id !== tx.id));
+          setModalVisible(false);
+        } catch (e: any) { Alert.alert('Erro', e.message); }
       },
-    ]);
+    });
   }
 
   async function handleToggle(tx: TransactionRow) {
@@ -778,6 +780,19 @@ export default function LancamentosScreen() {
                 numberOfLines={2}
               />
 
+              {/* Botão excluir (só ao editar) */}
+              {editing && (
+                <TouchableOpacity
+                  style={s.deleteBtn}
+                  onPress={() => confirmDelete(editing)}
+                  disabled={saving}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.expenseText} />
+                  <Text style={s.deleteTxt}>Excluir lançamento</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Botões */}
               <View style={s.sheetBtns}>
                 <TouchableOpacity
@@ -1055,4 +1070,12 @@ const s = StyleSheet.create({
     backgroundColor: colors.brand, alignItems: 'center',
   },
   saveTxt: { color: colors.brandText, fontWeight: '700', fontSize: 15 },
+
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 13, borderRadius: 12, marginTop: 4, marginBottom: 4,
+    borderWidth: 1, borderColor: colors.expenseStrong,
+    backgroundColor: alpha(colors.expenseStrong, 0.15),
+  },
+  deleteTxt: { color: colors.expenseText, fontWeight: '700', fontSize: 15 },
 });
