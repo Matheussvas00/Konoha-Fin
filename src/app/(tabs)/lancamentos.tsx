@@ -5,7 +5,7 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, Switch, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   TransactionType, TransactionRow, RecurrencePattern, PaymentMethod,
   listTransactions, createTransaction, updateTransaction,
@@ -78,14 +78,40 @@ function PickerModal({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  const [query, setQuery] = useState('');
+  useEffect(() => { if (!visible) setQuery(''); }, [visible]);
+  const q = query.trim().toLowerCase();
+  const shown = q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items;
+  const showSearch = items.length > 6;
+
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <TouchableOpacity style={pm.overlay} activeOpacity={1} onPress={onClose}>
         <View style={pm.sheet} onStartShouldSetResponder={() => true}>
           <View style={pm.handle} />
           <Text style={pm.title}>{title}</Text>
-          <ScrollView>
-            {items.map((item) => (
+          {showSearch && (
+            <View style={pm.searchBox}>
+              <Ionicons name="search" size={16} color={colors.textFaint} />
+              <TextInput
+                style={pm.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Buscar…"
+                placeholderTextColor={colors.placeholder}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {query.length > 0 && (
+                <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.textFaint} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          <ScrollView keyboardShouldPersistTaps="handled">
+            {shown.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={pm.item}
@@ -102,6 +128,9 @@ function PickerModal({
                 )}
               </TouchableOpacity>
             ))}
+            {shown.length === 0 && (
+              <Text style={pm.emptyTxt}>Nenhum resultado para “{query}”.</Text>
+            )}
           </ScrollView>
         </View>
       </TouchableOpacity>
@@ -120,6 +149,13 @@ const pm = StyleSheet.create({
     alignSelf: 'center', marginTop: 12, marginBottom: 16,
   },
   title: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 12 },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12,
+  },
+  searchInput: { flex: 1, color: colors.text, fontSize: 15, padding: 0 },
+  emptyTxt: { color: colors.textFaint, fontSize: 14, textAlign: 'center', paddingVertical: 20 },
   item: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border,
@@ -169,6 +205,7 @@ export default function LancamentosScreen() {
   const [isPending, setIsPending]     = useState(false);
   const [notes, setNotes]             = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
+  const [paySearch, setPaySearch]     = useState('');
   const [recurrence, setRecurrence]   = useState<RecurrencePattern | 'none'>('none');
   const [recurrenceEnd, setRecurrenceEnd] = useState('');
   const [saving, setSaving]           = useState(false);
@@ -206,6 +243,26 @@ export default function LancamentosScreen() {
   useEffect(() => { loadAll(); }, [month]);
   const onRefresh = useCallback(() => loadAll(true), [month]);
 
+  // Recarrega listas auxiliares ao focar a tela — reflete categorias e formas
+  // de pagamento criadas em outras abas sem precisar recarregar tudo.
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const [accs, cats] = await Promise.all([
+            listAccountsWithBalance(),
+            listCategories(),
+          ]);
+          setAccounts(accs);
+          setCategories(cats);
+        } catch { /* noop */ }
+        try {
+          setPaymentMethods(await ensureDefaultPaymentMethods());
+        } catch { /* tabela 007 pode não existir ainda */ }
+      })();
+    }, [])
+  );
+
   // ── Abertura do form ──────────────────────────────────────────────
 
   function openCreate(defaultType: TransactionType = 'expense') {
@@ -220,6 +277,7 @@ export default function LancamentosScreen() {
     setIsPending(false);
     setNotes('');
     setPaymentMethod('');
+    setPaySearch('');
     setRecurrence('none');
     setRecurrenceEnd('');
     setModalVisible(true);
@@ -237,6 +295,7 @@ export default function LancamentosScreen() {
     setIsPending(tx.status === 'pending');
     setNotes(tx.notes ?? '');
     setPaymentMethod(tx.payment_method ?? '');
+    setPaySearch('');
     setRecurrence(tx.recurrence ?? 'none');
     setRecurrenceEnd(tx.recurrence_end ?? '');
     setModalVisible(true);
@@ -677,9 +736,30 @@ export default function LancamentosScreen() {
 
               {/* Forma de pagamento */}
               <Text style={s.label}>Forma de pagamento</Text>
+              {paymentMethods.length > 6 && (
+                <View style={s.pmSearchBox}>
+                  <Ionicons name="search" size={15} color={colors.textFaint} />
+                  <TextInput
+                    style={s.pmSearchInput}
+                    value={paySearch}
+                    onChangeText={setPaySearch}
+                    placeholder="Buscar forma…"
+                    placeholderTextColor={colors.placeholder}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {paySearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setPaySearch('')} hitSlop={8}>
+                      <Ionicons name="close-circle" size={15} color={colors.textFaint} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               <ScrollView horizontal showsHorizontalScrollIndicator={false}
                 contentContainerStyle={s.recRow} style={{ marginBottom: 16 }}>
-                {paymentMethods.map((p) => (
+                {paymentMethods
+                  .filter((p) => !paySearch.trim() || p.name.toLowerCase().includes(paySearch.trim().toLowerCase()))
+                  .map((p) => (
                   <TouchableOpacity
                     key={p.key}
                     style={[s.pmChip, paymentMethod === p.key && s.pmChipActive]}
@@ -1051,6 +1131,12 @@ const s = StyleSheet.create({
   pmChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
   pmChipTxt: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   pmChipTxtActive: { color: colors.brandText },
+  pmSearchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10,
+  },
+  pmSearchInput: { flex: 1, color: colors.text, fontSize: 14, padding: 0 },
 
   recNote: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
