@@ -11,8 +11,10 @@ import {
   ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_COLORS,
   listAccountsWithBalance, createAccount, updateAccount, archiveAccount,
   listArchivedAccounts, restoreAccount, deleteAccount,
+  BalanceEntry, addBalanceEntry, listBalanceEntries, deleteBalanceEntry,
 } from '../../lib/accounts';
 import { confirmAction, notify } from '../../lib/confirm';
+import { maskMoney, parseMoney, maskDate, brToISO, isoToBR, todayBR } from '../../lib/masks';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -52,6 +54,13 @@ export default function CarteirasScreen() {
   const [formColor, setFormColor]     = useState(ACCOUNT_TYPE_COLORS.checking);
   const [saving, setSaving]           = useState(false);
 
+  // implantação de saldo
+  const [balanceWallet, setBalanceWallet]   = useState<AccountWithBalance | null>(null);
+  const [balanceEntries, setBalanceEntries] = useState<BalanceEntry[]>([]);
+  const [balanceAmount, setBalanceAmount]   = useState('');
+  const [balanceDate, setBalanceDate]       = useState(todayBR());
+  const [balanceSaving, setBalanceSaving]   = useState(false);
+
   // ── Carregamento ────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -73,7 +82,7 @@ export default function CarteirasScreen() {
     setEditingId(null);
     setFormName('');
     setFormType('checking');
-    setFormBalance('0');
+    setFormBalance('');
     setFormColor(ACCOUNT_TYPE_COLORS.checking);
     setModalVisible(true);
   }
@@ -109,7 +118,7 @@ export default function CarteirasScreen() {
         await createAccount({
           name:            formName.trim(),
           type:            formType,
-          initial_balance: parseInput(formBalance),
+          initial_balance: parseMoney(formBalance),
           color:           formColor,
         });
       }
@@ -120,6 +129,56 @@ export default function CarteirasScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // ── Implantar saldo ─────────────────────────────────────────────────
+  async function openBalance(wallet: AccountWithBalance) {
+    setBalanceWallet(wallet);
+    setBalanceAmount('');
+    setBalanceDate(todayBR());
+    setBalanceEntries([]);
+    try {
+      setBalanceEntries(await listBalanceEntries(wallet.id));
+    } catch (e: any) {
+      notify('Erro', e.message);
+    }
+  }
+
+  async function addBalance() {
+    if (!balanceWallet) return;
+    const amount = parseMoney(balanceAmount);
+    if (!amount || amount <= 0) { notify('Atenção', 'Informe um valor maior que zero.'); return; }
+    const iso = brToISO(balanceDate);
+    if (!iso) { notify('Atenção', 'Data inválida. Use DD/MM/AAAA.'); return; }
+    setBalanceSaving(true);
+    try {
+      await addBalanceEntry(balanceWallet.id, amount, iso);
+      setBalanceAmount('');
+      setBalanceEntries(await listBalanceEntries(balanceWallet.id));
+      await load();
+    } catch (e: any) {
+      notify('Erro', e.message);
+    } finally {
+      setBalanceSaving(false);
+    }
+  }
+
+  function removeBalance(entry: BalanceEntry) {
+    confirmAction({
+      title: 'Remover saldo implantado',
+      message: `Remover o saldo de ${formatBRL(entry.amount)} de ${isoToBR(entry.date)}?`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteBalanceEntry(entry.id);
+          setBalanceEntries((prev) => prev.filter((e) => e.id !== entry.id));
+          await load();
+        } catch (e: any) {
+          notify('Erro', e.message);
+        }
+      },
+    });
   }
 
   function confirmArchive(account: AccountWithBalance) {
@@ -284,13 +343,22 @@ export default function CarteirasScreen() {
                 <Text style={[styles.cardBalance, item.balance < 0 && styles.negative]}>
                   {formatBRL(item.balance)}
                 </Text>
-                <TouchableOpacity
-                  onPress={() => confirmArchive(item)}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  style={styles.archiveBtn}
-                >
-                  <Ionicons name="archive-outline" size={16} color={colors.textFaint} />
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    onPress={() => openBalance(item)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={styles.archiveBtn}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color={colors.income} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => confirmArchive(item)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={styles.archiveBtn}
+                  >
+                    <Ionicons name="archive-outline" size={16} color={colors.textFaint} />
+                  </TouchableOpacity>
+                </View>
               </View>
             </TouchableOpacity>
           );
@@ -373,7 +441,7 @@ export default function CarteirasScreen() {
                 <TextInput
                   style={styles.input}
                   value={formBalance}
-                  onChangeText={setFormBalance}
+                  onChangeText={(t) => setFormBalance(maskMoney(t))}
                   keyboardType="decimal-pad"
                   placeholder="0,00"
                   placeholderTextColor={colors.placeholder}
@@ -420,6 +488,80 @@ export default function CarteirasScreen() {
             </View>
 
             <View style={{ height: 40 }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* ── Modal implantar saldo ────────────────────────────────────── */}
+      <Modal
+        visible={!!balanceWallet}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setBalanceWallet(null)}
+      >
+        <View style={styles.modalRoot}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setBalanceWallet(null)} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.sheet}
+        >
+          <View style={styles.sheetHandle} />
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={styles.sheetTitle}>Implantar saldo</Text>
+            {balanceWallet && (
+              <Text style={styles.balanceSub}>
+                {balanceWallet.name} · saldo atual {formatBRL(balanceWallet.balance)}
+              </Text>
+            )}
+
+            <Text style={styles.fieldLabel}>Valor (R$)</Text>
+            <TextInput
+              style={styles.input}
+              value={balanceAmount}
+              onChangeText={(t) => setBalanceAmount(maskMoney(t))}
+              keyboardType="decimal-pad"
+              placeholder="0,00"
+              placeholderTextColor={colors.placeholder}
+            />
+
+            <Text style={styles.fieldLabel}>Data (DD/MM/AAAA)</Text>
+            <TextInput
+              style={styles.input}
+              value={balanceDate}
+              onChangeText={(t) => setBalanceDate(maskDate(t))}
+              keyboardType="numeric"
+              maxLength={10}
+              placeholder="07/06/2025"
+              placeholderTextColor={colors.placeholder}
+            />
+
+            <TouchableOpacity
+              style={[styles.addBalanceBtn, balanceSaving && { opacity: 0.7 }]}
+              onPress={addBalance}
+              disabled={balanceSaving}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add" size={18} color={colors.brandText} />
+              <Text style={styles.addBalanceTxt}>{balanceSaving ? 'Salvando…' : 'Adicionar saldo'}</Text>
+            </TouchableOpacity>
+
+            <Text style={[styles.fieldLabel, { marginTop: 22 }]}>Histórico</Text>
+            {balanceEntries.length === 0 ? (
+              <Text style={styles.fieldHint}>Nenhum saldo implantado ainda.</Text>
+            ) : (
+              balanceEntries.map((e) => (
+                <View key={e.id} style={styles.histRow}>
+                  <Ionicons name="cash-outline" size={16} color={colors.income} />
+                  <Text style={styles.histDate}>{isoToBR(e.date)}</Text>
+                  <Text style={styles.histVal}>{formatBRL(e.amount)}</Text>
+                  <TouchableOpacity onPress={() => removeBalance(e)} hitSlop={10}>
+                    <Ionicons name="trash-outline" size={16} color={colors.expense} />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+            <View style={{ height: 30 }} />
           </ScrollView>
         </KeyboardAvoidingView>
         </View>
@@ -682,12 +824,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  cardActions: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+  },
   archiveBtn: {
     opacity: 0.8,
   },
   negative: {
     color: colors.expense,
   },
+
+  // Implantar saldo
+  balanceSub: { color: colors.textMuted, fontSize: 13, marginBottom: 18, marginTop: -8 },
+  addBalanceBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: colors.brand, borderRadius: 12, paddingVertical: 13, marginTop: 4,
+  },
+  addBalanceTxt: { color: colors.brandText, fontWeight: '700', fontSize: 15 },
+  histRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  histDate: { color: colors.textMuted, fontSize: 13, flex: 1 },
+  histVal: { color: colors.text, fontSize: 14, fontWeight: '700' },
 
   // Empty state
   emptyWrap: {

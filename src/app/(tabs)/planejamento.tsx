@@ -17,6 +17,7 @@ import {
 } from '../../lib/goals';
 import { Category, listCategoriesByType } from '../../lib/categories';
 import { confirmAction } from '../../lib/confirm';
+import { maskMoney, parseMoney } from '../../lib/masks';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -132,7 +133,7 @@ function BudgetsTab({ search }: { search: string }) {
 
   async function handleSave() {
     if (!pickedCat) { Alert.alert('Atenção', 'Escolha uma categoria.'); return; }
-    const value = parseInput(amount);
+    const value = parseMoney(amount);
     if (value <= 0) { Alert.alert('Atenção', 'Informe um valor maior que zero.'); return; }
     setSaving(true);
     try {
@@ -282,7 +283,7 @@ function BudgetsTab({ search }: { search: string }) {
             <TextInput
               style={s.input}
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(t) => setAmount(maskMoney(t))}
               keyboardType="decimal-pad"
               placeholder="0,00"
               placeholderTextColor={colors.placeholder}
@@ -346,14 +347,14 @@ function GoalsTab({ search }: { search: string }) {
 
   async function handleSave() {
     if (!name.trim()) { Alert.alert('Atenção', 'Dê um nome à meta.'); return; }
-    const t = parseInput(target);
+    const t = parseMoney(target);
     if (t <= 0) { Alert.alert('Atenção', 'Informe um valor alvo.'); return; }
     setSaving(true);
     try {
       await createGoal({
         name: name.trim(),
         target_amount: t,
-        current_amount: parseInput(initial),
+        current_amount: parseMoney(initial),
         color, icon,
       });
       setModal(false);
@@ -527,7 +528,7 @@ function GoalsTab({ search }: { search: string }) {
             <TextInput
               style={s.input}
               value={target}
-              onChangeText={setTarget}
+              onChangeText={(t) => setTarget(maskMoney(t))}
               keyboardType="decimal-pad"
               placeholder="0,00"
               placeholderTextColor={colors.placeholder}
@@ -537,7 +538,7 @@ function GoalsTab({ search }: { search: string }) {
             <TextInput
               style={s.input}
               value={initial}
-              onChangeText={setInitial}
+              onChangeText={(t) => setInitial(maskMoney(t))}
               keyboardType="decimal-pad"
               placeholder="0,00"
               placeholderTextColor={colors.placeholder}

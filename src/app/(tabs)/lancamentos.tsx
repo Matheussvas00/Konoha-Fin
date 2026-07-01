@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Modal, TextInput, Alert, RefreshControl, StatusBar,
-  ScrollView, KeyboardAvoidingView, Platform, Switch, ActivityIndicator,
+  ScrollView, KeyboardAvoidingView, Platform, Switch, ActivityIndicator, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -19,6 +19,7 @@ import {
 } from '../../lib/paymentMethods';
 import { exportTransactionsCSV } from '../../lib/export';
 import { confirmAction, notify } from '../../lib/confirm';
+import { maskDate, brToISO, isoToBR, todayBR, maskMoney, parseMoney } from '../../lib/masks';
 import { colors, spacing, radius, font, alpha } from '../../lib/theme';
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -32,56 +33,7 @@ function fmtDate(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-// ── Máscaras ────────────────────────────────────────────────────────────
-
-// Data brasileira DD/MM/AAAA enquanto o usuário digita.
-function maskDate(v: string): string {
-  const n = v.replace(/\D/g, '').slice(0, 8);
-  let out = n.slice(0, 2);
-  if (n.length >= 3) out += '/' + n.slice(2, 4);
-  if (n.length >= 5) out += '/' + n.slice(4, 8);
-  return out;
-}
-
-// DD/MM/AAAA -> AAAA-MM-DD (ou null se inválida).
-function brToISO(br: string): string | null {
-  const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!m) return null;
-  const dd = +m[1], mm = +m[2];
-  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
-  const iso = `${m[3]}-${m[2]}-${m[1]}`;
-  const dt = new Date(iso + 'T00:00:00');
-  if (isNaN(dt.getTime()) || dt.getMonth() + 1 !== mm || dt.getDate() !== dd) return null;
-  return iso;
-}
-
-// AAAA-MM-DD -> DD/MM/AAAA.
-function isoToBR(iso: string): string {
-  const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
-}
-
-function todayBR(): string {
-  return isoToBR(todayISO());
-}
-
-// Valor em moeda: "1234567" (centavos digitados) -> "12.345,67".
-function maskMoney(v: string): string {
-  const digits = v.replace(/\D/g, '');
-  if (!digits) return '';
-  const value = (parseInt(digits, 10) / 100).toFixed(2);
-  const [int, dec] = value.split('.');
-  return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${dec}`;
-}
-
-function parseMoney(v: string): number {
-  const digits = v.replace(/\D/g, '');
-  return digits ? parseInt(digits, 10) / 100 : 0;
-}
+// (máscaras de data/moeda ficam em ../../lib/masks)
 
 const TYPE_LABELS: Record<TransactionType, string> = {
   income:   'Receita',
@@ -132,9 +84,12 @@ function PickerModal({
   const showSearch = items.length > 6;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <TouchableOpacity style={pm.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={pm.sheet} onStartShouldSetResponder={() => true}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={pm.overlay}>
+        {/* Backdrop atrás da folha: fechar só ao tocar fora dela (não rouba o
+            toque do campo de busca). */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={pm.sheet}>
           <View style={pm.handle} />
           <Text style={pm.title}>{title}</Text>
           {showSearch && (
@@ -180,7 +135,7 @@ function PickerModal({
             )}
           </ScrollView>
         </View>
-      </TouchableOpacity>
+      </View>
     </Modal>
   );
 }

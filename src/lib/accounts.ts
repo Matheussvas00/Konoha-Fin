@@ -200,3 +200,45 @@ export async function deleteAccount(id: string): Promise<void> {
     throw error;
   }
 }
+
+// ── Implantação de saldo ────────────────────────────────────────────────
+// "Implantar saldo" = registrar uma entrada de saldo na carteira, com data.
+// Guardamos como um lançamento de receita marcado, para (a) afetar o saldo
+// (a view account_balances soma as receitas) e (b) manter o histórico.
+
+export const BALANCE_ENTRY_DESC = 'Saldo implantado';
+
+export type BalanceEntry = { id: string; amount: number; date: string; created_at: string };
+
+export async function addBalanceEntry(accountId: string, amount: number, dateISO: string): Promise<void> {
+  const user_id = await currentUserId();
+  const { error } = await supabase.from('transactions').insert({
+    user_id,
+    account_id: accountId,
+    type: 'income',
+    status: 'effected',
+    description: BALANCE_ENTRY_DESC,
+    amount,
+    date: dateISO,
+    category_id: null,
+  });
+  if (error) throw error;
+}
+
+export async function listBalanceEntries(accountId: string): Promise<BalanceEntry[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, amount, date, created_at')
+    .eq('account_id', accountId)
+    .eq('type', 'income')
+    .eq('description', BALANCE_ENTRY_DESC)
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as BalanceEntry[];
+}
+
+export async function deleteBalanceEntry(id: string): Promise<void> {
+  const { error } = await supabase.from('transactions').delete().eq('id', id);
+  if (error) throw error;
+}
